@@ -1,0 +1,15 @@
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-01-05', '2026-01-27', 854);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-01-27', '2026-02-12', 726);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-02-12', '2026-02-23', 482);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-02-23', null, null);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-02-23', '2026-03-09', 632);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-03-09', '2026-03-19', 633);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-03-19', '2026-04-01', 574);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-04-01', '2026-04-19', 1071);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-04-29', '2026-05-19', 774);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-05-19', '2026-06-08', 847);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-06-08', '2026-06-25', 688);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-06-25', '2026-07-15', 661);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-07-15', '2026-08-04', 603);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-08-04', '2026-08-21', 573);
+insert into banhos_removedor (data_inicio, data_fim, total_telas) values ('2026-08-21', null, null);

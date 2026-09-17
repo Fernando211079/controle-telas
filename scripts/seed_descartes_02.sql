@@ -1,0 +1,14 @@
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-06-01', '1100x1100', 'Importado do Excel', 'Registro histórico importado da planilha.');
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-06-13', '1000x800', 'Importado do Excel', 'Registro histórico importado da planilha.');
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-07-12', '1000X800', 'Importado do Excel', 'Registro histórico importado da planilha.');
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-07-12', '940x720', 'Importado do Excel', 'Registro histórico importado da planilha.');
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-07-20', '1030x940', 'Importado do Excel', 'Registro histórico importado da planilha.');
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-07-21', '1030x940', 'Importado do Excel', 'Registro histórico importado da planilha.');
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-07-21', '1030x940', 'Importado do Excel', 'Registro histórico importado da planilha.');
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-07-31', '1300x900', 'Importado do Excel', 'Registro histórico importado da planilha.');
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-08-10', '940x720', 'Importado do Excel', 'Registro histórico importado da planilha.');
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-08-22', '1100x1100', 'Importado do Excel', 'Registro histórico importado da planilha.');
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-09-20', '770x670', 'Importado do Excel', 'Registro histórico importado da planilha.');
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-09-20', '770x670', 'Importado do Excel', 'Registro histórico importado da planilha.');
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-11-28', '840x670', 'Importado do Excel', 'Registro histórico importado da planilha.');
+insert into quadros_descartados (data, tamanho, motivo, observacao) values ('2023-11-28', '900x700', 'Importado do Excel', 'Registro histórico importado da planilha.');

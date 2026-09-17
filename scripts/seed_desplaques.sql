@@ -1,0 +1,16 @@
+insert into desplaques (data, unidade, quantidade) values ('2026-01-01', 'Etiquetas', 861);
+insert into desplaques (data, unidade, quantidade) values ('2026-01-01', 'Gráficos', 196);
+insert into desplaques (data, unidade, quantidade) values ('2026-02-01', 'Etiquetas', 984);
+insert into desplaques (data, unidade, quantidade) values ('2026-02-01', 'Gráficos', 230);
+insert into desplaques (data, unidade, quantidade) values ('2026-03-01', 'Etiquetas', 1073);
+insert into desplaques (data, unidade, quantidade) values ('2026-03-01', 'Gráficos', 263);
+insert into desplaques (data, unidade, quantidade) values ('2026-04-01', 'Etiquetas', 1194);
+insert into desplaques (data, unidade, quantidade) values ('2026-04-01', 'Gráficos', 252);
+insert into desplaques (data, unidade, quantidade) values ('2026-05-01', 'Etiquetas', 1204);
+insert into desplaques (data, unidade, quantidade) values ('2026-05-01', 'Gráficos', 358);
+insert into desplaques (data, unidade, quantidade) values ('2026-06-01', 'Etiquetas', 1017);
+insert into desplaques (data, unidade, quantidade) values ('2026-06-01', 'Gráficos', 243);
+insert into desplaques (data, unidade, quantidade) values ('2026-07-01', 'Etiquetas', 1054);
+insert into desplaques (data, unidade, quantidade) values ('2026-07-01', 'Gráficos', 234);
+insert into desplaques (data, unidade, quantidade) values ('2026-08-01', 'Etiquetas', 813);
+insert into desplaques (data, unidade, quantidade) values ('2026-08-01', 'Gráficos', 272);
