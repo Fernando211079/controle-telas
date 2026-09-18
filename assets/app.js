@@ -13,7 +13,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 
 async function bindingAvailable(){
   try{
-    const r=await fetch(S.supabase.supabaseUrl+"/auth/v1/health",{signal:AbortSignal.timeout(4000)});
+    const r=await fetch(S.supabase.supabaseUrl+"/auth/v1/health",{headers:{apikey:S.supabase.supabaseKey},signal:AbortSignal.timeout(4000)});
     return r.ok;
   }catch(e){return false}
 }
