@@ -138,11 +138,14 @@ function renderDashboard(){
  let des=filteredDesp(y,m);
  let et=des.filter(x=>norm(x.unidade)==="etiquetas").reduce((a,x)=>a+Number(x.quantidade||0),0);
  let gr=des.filter(x=>norm(x.unidade)==="graficos").reduce((a,x)=>a+Number(x.quantidade||0),0);
- let active=[...db.banhos].reverse().find(x=>!x.data_fim);
+ let closedB=db.banhos.filter(x=>x.data_fim&&x.total_telas!=null);
+ let avgB=closedB.length?Math.round(closedB.reduce((a,x)=>a+Number(x.total_telas||0),0)/closedB.length):null;
+ let lastB=[...db.banhos].sort((a,b)=>String(b.data_inicio||"").localeCompare(String(a.data_inicio||"")))[0];
+ let lastDurB=lastB?bathDuration(lastB):null;
  document.getElementById("kpis").innerHTML=
   card("Telas rasgadas",data.length,"período selecionado","⚠")+
   card("Desplaque",(et+gr).toLocaleString("pt-BR"),m==="all"?("total de "+y):"período selecionado","◎")+
-  card("Banho atual",active?.total_telas??"—",active?"telas no ciclo atual":"sem banho aberto","◷")+
+  card("Banho removedor",avgB!=null?avgB.toLocaleString("pt-BR")+" méd.":"—",lastB?`último: ${lastB.total_telas??"—"} telas${lastDurB!=null?" em "+lastDurB+" dias":""}`:"sem registros","◷")+
   card("Quadros descartados",db.descartes.filter(x=>String(x.data).startsWith(y)).length,"no ano selecionado","▣");
  renderBars("reasonBars",groupCount(data,"motivo"),"motivo");
  renderBars("operatorBars",groupCount(data,"operador"),"operador");
@@ -204,10 +207,20 @@ function renderDesplaques(){
  let arr=rows.sort((a,b)=>String(b.data||"").localeCompare(String(a.data||"")));
  document.getElementById("despTable").innerHTML=arr.map(x=>`<tr><td>${fmtDate(x.data||x.mes)}</td><td>${esc(x.unidade)}</td><td><strong>${Number(x.quantidade||0).toLocaleString("pt-BR")}</strong></td></tr>`).join("");
 }
+function bathDuration(x){
+ if(!x.data_fim||!x.data_inicio)return null;
+ return Math.max(0,Math.round((new Date(x.data_fim)-new Date(x.data_inicio))/86400000));
+}
 function renderBanhos(){
- let arr=[...db.banhos].sort((a,b)=>b.data_inicio.localeCompare(a.data_inicio)),active=arr.find(x=>!x.data_fim);
- document.getElementById("currentBath").innerHTML=active?`<div class="eyebrow">BANHO ATUAL</div><h2>Iniciado em ${fmtDate(active.data_inicio)}</h2><p>Quantidade registrada no ciclo: <strong>${active.total_telas??0} telas</strong>. O sistema poderá passar a acumular automaticamente os lançamentos de desplaque.</p>`:`<div class="eyebrow">BANHO</div><h2>Nenhum banho em aberto</h2><p>Registre uma nova troca para iniciar um ciclo.</p>`;
- document.getElementById("bathTable").innerHTML=arr.map(x=>{let dur=x.data_fim?Math.max(0,Math.round((new Date(x.data_fim)-new Date(x.data_inicio))/86400000))+" dias":"Em andamento";return `<tr><td>${fmtDate(x.data_inicio)}</td><td>${fmtDate(x.data_fim)}</td><td>${dur}</td><td>${x.total_telas??"—"}</td></tr>`}).join("");
+ let arr=[...db.banhos].sort((a,b)=>String(b.data_inicio||"").localeCompare(String(a.data_inicio||"")));
+ let closed=db.banhos.filter(x=>x.data_fim&&x.total_telas!=null);
+ let avg=closed.length?Math.round(closed.reduce((a,x)=>a+Number(x.total_telas||0),0)/closed.length):null;
+ let last=arr[0];
+ let lastDur=last?bathDuration(last):null;
+ document.getElementById("currentBath").innerHTML=last?
+  `<div class="eyebrow">RESUMO</div><h2>Média de ${avg!=null?avg.toLocaleString("pt-BR"):"—"} telas por ciclo</h2><p>Último ciclo: ${fmtDate(last.data_inicio)} a ${fmtDate(last.data_fim)} (${lastDur!=null?lastDur+" dias":"—"}) — <strong>${last.total_telas??"—"} telas</strong>.</p>`
+  :`<div class="eyebrow">BANHO</div><h2>Nenhum ciclo registrado</h2><p>Registre uma troca para começar.</p>`;
+ document.getElementById("bathTable").innerHTML=arr.map(x=>{let dur=bathDuration(x);return `<tr><td>${fmtDate(x.data_inicio)}</td><td>${fmtDate(x.data_fim)}</td><td>${dur!=null?dur+" dias":"—"}</td><td>${x.total_telas??"—"}</td></tr>`}).join("");
 }
 function renderDescartes(){
  let q=norm(document.getElementById("searchDesc").value), y=document.getElementById("filterDescYear").value;
@@ -226,7 +239,7 @@ function openModal(type){
  let html="";
  if(type==="ocorrencia")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Operador<select name="operador">${db.operadores.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field">Motivo<select name="motivo">${db.motivos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field">Tamanho<select name="tamanho">${db.tamanhos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field full">Observação<textarea name="observacao" rows="3"></textarea></label></div>`;
  if(type==="desplaque")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Unidade<select name="unidade"><option>Etiquetas</option><option>Gráficos</option></select></label><label class="field full">Quantidade<input type="number" name="quantidade" min="1" required></label></div>`;
- if(type==="banho")html=`<div class="form-grid"><label class="field">Início<input type="date" name="data_inicio" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Data da troca/fim<input type="date" name="data_fim"></label><label class="field full">Total de telas do ciclo<input type="number" name="total_telas" min="0" placeholder="Se deixar vazio, será calculado quando a integração estiver ativa."></label></div>`;
+ if(type==="banho")html=`<div class="form-grid"><label class="field">Início<input type="date" name="data_inicio" required></label><label class="field">Fim<input type="date" name="data_fim" required></label><label class="field full">Total de telas do ciclo<input type="number" name="total_telas" min="0" required></label></div>`;
  if(type==="descarte")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Tamanho<select name="tamanho">${db.tamanhos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field full">Motivo<input name="motivo" value=""></label><label class="field full">Observação<textarea name="observacao" rows="3"></textarea></label></div>`;
  modalForm.innerHTML=html+`<div class="form-actions"><button type="button" class="secondary" onclick="closeModal()">Cancelar</button><button class="primary">Salvar</button></div>`;
  modal.classList.add("open");
