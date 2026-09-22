@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Controle de Telas | Indemetal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&family=Saira+Condensed:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">I</div><div><strong>INDEMETAL</strong><span>Controle de Telas</span></div></div>
+      <nav>
+        <button class="nav active" data-page="dashboard">▦ <span>Dashboard</span></button>
+        <button class="nav" data-page="ocorrencias">⚠ <span>Telas rasgadas</span></button>
+        <button class="nav" data-page="desplaques">◎ <span>Desplaque</span></button>
+        <button class="nav" data-page="banhos">◷ <span>Banho removedor</span></button>
+        <button class="nav" data-page="descartes">▣ <span>Quadros descartados</span></button>
+        <button class="nav" data-page="cadastros">⚙ <span>Cadastros</span></button>
+      </nav>
+      <div class="sidebar-foot">Sistema v1.1<br><small>Supabase + Verdent</small></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div><div class="eyebrow">SETOR DE TELAS</div><h1 id="pageTitle">Dashboard</h1></div>
+        <div class="top-actions"><span id="connectionBadge" class="badge demo">Modo demonstração</span><button id="logoutBtn" class="icon-btn" style="display:none">Sair</button><button id="reloadBtn" class="icon-btn" title="Atualizar">↻</button></div>
+      </header>
+
+      <section id="page-dashboard" class="page active">
+        <div class="filters">
+          <label>Ano<select id="dashYear"></select></label>
+          <label>Mês<select id="dashMonth"><option value="all">Todos</option></select></label>
+        </div>
+        <div class="cards" id="kpis"></div>
+        <div class="grid two">
+          <article class="panel"><div class="panel-head"><div><h2>Ocorrências por mês</h2><p>Telas rasgadas registradas</p></div></div><div class="chart-wrap"><canvas id="monthlyChart"></canvas></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Motivos</h2><p>Distribuição das ocorrências</p></div></div><div id="reasonBars" class="bars"></div></article>
+        </div>
+        <div class="grid two">
+          <article class="panel"><div class="panel-head"><div><h2>Ranking por operador</h2><p>Quantidade de ocorrências</p></div></div><div id="operatorBars" class="bars"></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Desplaque por unidade</h2><p>Quantidade por mês</p></div><div class="legend"><span class="lg"><i style="background:#e1261c"></i>Etiquetas</span><span class="lg"><i style="background:#17212b"></i>Gráficos</span></div></div><div class="chart-wrap"><canvas id="desplaqueChart"></canvas></div></article>
+        </div>
+      </section>
+
+      <section id="page-ocorrencias" class="page">
+        <div class="page-tools"><div><h2>Registrar tela rasgada</h2><p>Faça o lançamento e mantenha o histórico centralizado.</p></div><button class="primary" onclick="openModal('ocorrencia')">+ Nova ocorrência</button></div>
+        <div class="panel"><div class="table-tools"><input id="searchOc" placeholder="Pesquisar operador, motivo ou tamanho..."><select id="filterOcMonth"><option value="all">Todos os meses</option></select></div><div class="table-scroll"><table><thead><tr><th>Data</th><th>Operador</th><th>Motivo</th><th>Tamanho</th><th>Observação</th></tr></thead><tbody id="ocTable"></tbody></table></div></div>
+      </section>
+
+      <section id="page-desplaques" class="page">
+        <div class="page-tools"><div><h2>Controle de desplaque</h2><p>Registre a quantidade por unidade.</p></div><div class="tools-row"><label class="mini-label">Ano<select id="despYear"></select></label><button class="primary" onclick="openModal('desplaque')">+ Novo lançamento</button></div></div>
+        <div class="cards" id="despKpis"></div>
+        <div class="panel" style="margin-bottom:18px"><div class="panel-head"><div><h2>Mês a mês</h2><p>Colunas por unidade, como na planilha</p></div></div><div class="table-scroll" id="despPivot"></div></div>
+        <div class="panel"><div class="panel-head"><div><h2>Lançamentos</h2><p>Histórico de registros</p></div></div><div class="table-scroll"><table><thead><tr><th>Data</th><th>Unidade</th><th>Quantidade</th></tr></thead><tbody id="despTable"></tbody></table></div></div>
+      </section>
+
+      <section id="page-banhos" class="page">
+        <div class="page-tools"><div><h2>Troca de banho do removedor</h2><p>Controle o ciclo do banho e as telas processadas.</p></div><button class="primary" onclick="openModal('banho')">+ Registrar troca</button></div>
+        <div class="panel highlight" id="currentBath"></div>
+        <div class="panel"><div class="table-scroll"><table><thead><tr><th>Início</th><th>Fim</th><th>Duração</th><th>Telas</th></tr></thead><tbody id="bathTable"></tbody></table></div></div>
+      </section>
+
+      <section id="page-descartes" class="page">
+        <div class="page-tools"><div><h2>Quadros descartados</h2><p>Histórico de quadros jogados fora.</p></div><button class="primary" onclick="openModal('descarte')">+ Novo descarte</button></div>
+        <div class="cards" id="descKpis"></div>
+        <div class="panel"><div class="table-tools"><input id="searchDesc" placeholder="Pesquisar tamanho ou motivo..."><select id="filterDescYear"><option value="all">Todos os anos</option></select></div><div class="table-scroll"><table><thead><tr><th>Data</th><th>Tamanho</th><th>Motivo</th><th>Observação</th></tr></thead><tbody id="descTable"></tbody></table></div></div>
+      </section>
+
+      <section id="page-cadastros" class="page">
+        <div class="page-tools"><div><h2>Cadastros</h2><p>Listas usadas nos formulários. Você poderá administrar tudo pelo sistema.</p></div></div>
+        <div class="grid three">
+          <article class="panel"><h2>Operadores</h2><div class="list" id="operatorsList"></div><button class="secondary" onclick="openCatalog('operadores')">+ Adicionar operador</button></article>
+          <article class="panel"><h2>Motivos</h2><div class="list" id="reasonsList"></div><button class="secondary" onclick="openCatalog('motivos')">+ Adicionar motivo</button></article>
+          <article class="panel"><h2>Tamanhos</h2><div class="list" id="sizesList"></div><button class="secondary" onclick="openCatalog('tamanhos')">+ Adicionar tamanho</button></article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="loginGate" class="gate">
+    <div class="gate-card">
+      <div class="brand-mark gate-mark">I</div>
+      <h2>Controle de Telas</h2>
+      <p>Acesso restrito. Entre com sua conta para consultar e lançar registros.</p>
+      <button id="gateLoginBtn" class="primary">Entrar</button>
+    </div>
+  </div>
+
+  <div id="modal" class="modal"><div class="modal-card"><div class="modal-head"><h2 id="modalTitle"></h2><button onclick="closeModal()">×</button></div><form id="modalForm"></form></div></div>
+  <script src="assets/vendor.js"></script>
+  <script src="assets/seed.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

@@ -13,7 +13,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 
 async function bindingAvailable(){
   try{
-    const r=await fetch(S.supabase.supabaseUrl+"/auth/v1/health",{signal:AbortSignal.timeout(4000)});
+    const r=await fetch(S.supabase.supabaseUrl+"/auth/v1/health",{headers:{apikey:S.supabase.supabaseKey},signal:AbortSignal.timeout(4000)});
     return r.ok;
   }catch(e){return false}
 }
@@ -37,13 +37,15 @@ async function connectAndLoad(){
       supabaseClient.from("motivos").select("*").order("nome"),
       supabaseClient.from("tamanhos_tela").select("*").order("nome")
     ]);
-    if(!o.error && o.data) db.ocorrencias=o.data;
-    if(!d.error && d.data) db.desplaques=d.data;
-    if(!b.error && b.data) db.banhos=b.data;
-    if(!x.error && x.data) db.descartes=x.data;
-    if(!op.error && op.data?.length) db.operadores=op.data.map(r=>r.nome);
-    if(!mot.error && mot.data?.length) db.motivos=mot.data.map(r=>r.nome);
-    if(!tam.error && tam.data?.length) db.tamanhos=tam.data.map(r=>r.nome);
+    let erros=[];
+    if(!o.error && o.data) db.ocorrencias=o.data; else if(o.error) erros.push("telas_rasgadas: "+o.error.message);
+    if(!d.error && d.data) db.desplaques=d.data; else if(d.error) erros.push("desplaques: "+d.error.message);
+    if(!b.error && b.data) db.banhos=b.data; else if(b.error) erros.push("banhos_removedor: "+b.error.message);
+    if(!x.error && x.data) db.descartes=x.data; else if(x.error) erros.push("quadros_descartados: "+x.error.message);
+    if(!op.error && op.data?.length) db.operadores=op.data.map(r=>r.nome); else if(op.error) erros.push("operadores: "+op.error.message);
+    if(!mot.error && mot.data?.length) db.motivos=mot.data.map(r=>r.nome); else if(mot.error) erros.push("motivos: "+mot.error.message);
+    if(!tam.error && tam.data?.length) db.tamanhos=tam.data.map(r=>r.nome); else if(tam.error) erros.push("tamanhos_tela: "+tam.error.message);
+    if(erros.length){console.error("Falhas ao carregar do Supabase:",erros);alert("Algumas tabelas não carregaram do Supabase:\n\n"+erros.join("\n"))}
     setBadge(true);
   }catch(e){console.warn(e);setBadge(false)}
   document.getElementById("loginGate").classList.remove("open");
@@ -136,11 +138,11 @@ function renderDashboard(){
  let des=filteredDesp(y,m);
  let et=des.filter(x=>norm(x.unidade)==="etiquetas").reduce((a,x)=>a+Number(x.quantidade||0),0);
  let gr=des.filter(x=>norm(x.unidade)==="graficos").reduce((a,x)=>a+Number(x.quantidade||0),0);
- let active=[...db.banhos].reverse().find(x=>!x.data_fim);
+ let st=bathStats();
  document.getElementById("kpis").innerHTML=
   card("Telas rasgadas",data.length,"período selecionado","⚠")+
   card("Desplaque",(et+gr).toLocaleString("pt-BR"),m==="all"?("total de "+y):"período selecionado","◎")+
-  card("Banho atual",active?.total_telas??"—",active?"telas no ciclo atual":"sem banho aberto","◷")+
+  card("Banho removedor",st.avg!=null?st.avg.toLocaleString("pt-BR")+" méd.":"—",st.last?`último ciclo: ${st.last.total_telas??"—"} telas${st.lastDur!=null?" em "+st.lastDur+" dias":""}`:"sem registros","◷")+
   card("Quadros descartados",db.descartes.filter(x=>String(x.data).startsWith(y)).length,"no ano selecionado","▣");
  renderBars("reasonBars",groupCount(data,"motivo"),"motivo");
  renderBars("operatorBars",groupCount(data,"operador"),"operador");
@@ -202,10 +204,25 @@ function renderDesplaques(){
  let arr=rows.sort((a,b)=>String(b.data||"").localeCompare(String(a.data||"")));
  document.getElementById("despTable").innerHTML=arr.map(x=>`<tr><td>${fmtDate(x.data||x.mes)}</td><td>${esc(x.unidade)}</td><td><strong>${Number(x.quantidade||0).toLocaleString("pt-BR")}</strong></td></tr>`).join("");
 }
+function bathDuration(x){
+ if(!x.data_fim||!x.data_inicio)return null;
+ return Math.max(0,Math.round((new Date(x.data_fim)-new Date(x.data_inicio))/86400000));
+}
+function bathStats(){
+ let valid=db.banhos.filter(x=>x.data_inicio&&x.total_telas!=null);
+ let avg=valid.length?Math.round(valid.reduce((a,x)=>a+Number(x.total_telas||0),0)/valid.length):null;
+ let complete=db.banhos.filter(x=>x.data_fim&&x.total_telas!=null);
+ let last=[...complete].sort((a,b)=>String(b.data_fim||"").localeCompare(String(a.data_fim||"")))[0]
+  ||[...db.banhos].sort((a,b)=>String(b.data_inicio||"").localeCompare(String(a.data_inicio||"")))[0];
+ return {avg,last,lastDur:last?bathDuration(last):null};
+}
 function renderBanhos(){
- let arr=[...db.banhos].sort((a,b)=>b.data_inicio.localeCompare(a.data_inicio)),active=arr.find(x=>!x.data_fim);
- document.getElementById("currentBath").innerHTML=active?`<div class="eyebrow">BANHO ATUAL</div><h2>Iniciado em ${fmtDate(active.data_inicio)}</h2><p>Quantidade registrada no ciclo: <strong>${active.total_telas??0} telas</strong>. O sistema poderá passar a acumular automaticamente os lançamentos de desplaque.</p>`:`<div class="eyebrow">BANHO</div><h2>Nenhum banho em aberto</h2><p>Registre uma nova troca para iniciar um ciclo.</p>`;
- document.getElementById("bathTable").innerHTML=arr.map(x=>{let dur=x.data_fim?Math.max(0,Math.round((new Date(x.data_fim)-new Date(x.data_inicio))/86400000))+" dias":"Em andamento";return `<tr><td>${fmtDate(x.data_inicio)}</td><td>${fmtDate(x.data_fim)}</td><td>${dur}</td><td>${x.total_telas??"—"}</td></tr>`}).join("");
+ let arr=[...db.banhos].sort((a,b)=>String(b.data_inicio||"").localeCompare(String(a.data_inicio||"")));
+ let st=bathStats();
+ document.getElementById("currentBath").innerHTML=st.last?
+  `<div class="eyebrow">RESUMO</div><h2>Média de ${st.avg!=null?st.avg.toLocaleString("pt-BR"):"—"} telas por ciclo</h2><p>Último ciclo: ${fmtDate(st.last.data_inicio)} a ${fmtDate(st.last.data_fim)} (${st.lastDur!=null?st.lastDur+" dias":"—"}) — <strong>${st.last.total_telas??"—"} telas</strong>.</p>`
+  :`<div class="eyebrow">BANHO</div><h2>Nenhum ciclo registrado</h2><p>Registre uma troca para começar.</p>`;
+ document.getElementById("bathTable").innerHTML=arr.map(x=>{let dur=bathDuration(x);return `<tr><td>${fmtDate(x.data_inicio)}</td><td>${fmtDate(x.data_fim)}</td><td>${dur!=null?dur+" dias":"—"}</td><td>${x.total_telas??"—"}</td></tr>`}).join("");
 }
 function renderDescartes(){
  let q=norm(document.getElementById("searchDesc").value), y=document.getElementById("filterDescYear").value;
@@ -224,11 +241,11 @@ function openModal(type){
  let html="";
  if(type==="ocorrencia")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Operador<select name="operador">${db.operadores.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field">Motivo<select name="motivo">${db.motivos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field">Tamanho<select name="tamanho">${db.tamanhos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field full">Observação<textarea name="observacao" rows="3"></textarea></label></div>`;
  if(type==="desplaque")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Unidade<select name="unidade"><option>Etiquetas</option><option>Gráficos</option></select></label><label class="field full">Quantidade<input type="number" name="quantidade" min="1" required></label></div>`;
- if(type==="banho")html=`<div class="form-grid"><label class="field">Início<input type="date" name="data_inicio" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Data da troca/fim<input type="date" name="data_fim"></label><label class="field full">Total de telas do ciclo<input type="number" name="total_telas" min="0" placeholder="Se deixar vazio, será calculado quando a integração estiver ativa."></label></div>`;
+ if(type==="banho")html=`<div class="form-grid"><label class="field">Início<input type="date" name="data_inicio" required></label><label class="field">Fim<input type="date" name="data_fim" required></label><label class="field full">Quantidade de telas do ciclo<input type="number" name="total_telas" min="1" required></label></div>`;
  if(type==="descarte")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Tamanho<select name="tamanho">${db.tamanhos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field full">Motivo<input name="motivo" value=""></label><label class="field full">Observação<textarea name="observacao" rows="3"></textarea></label></div>`;
  modalForm.innerHTML=html+`<div class="form-actions"><button type="button" class="secondary" onclick="closeModal()">Cancelar</button><button class="primary">Salvar</button></div>`;
  modal.classList.add("open");
- modalForm.onsubmit=async e=>{e.preventDefault();let f=new FormData(modalForm),o=Object.fromEntries(f.entries());if(type==="ocorrencia"){db.ocorrencias.unshift(o);if(!await insert("telas_rasgadas",o))return}if(type==="desplaque"){o.quantidade=Number(o.quantidade);db.desplaques.push(o);if(!await insert("desplaques",o))return}if(type==="banho"){o.total_telas=o.total_telas?Number(o.total_telas):null;db.banhos.push(o);if(!await insert("banhos_removedor",o))return}if(type==="descarte"){db.descartes.unshift(o);if(!await insert("quadros_descartados",o))return}closeModal();renderAll()}
+ modalForm.onsubmit=async e=>{e.preventDefault();let f=new FormData(modalForm),o=Object.fromEntries(f.entries());if(type==="ocorrencia"){db.ocorrencias.unshift(o);if(!await insert("telas_rasgadas",o))return}if(type==="desplaque"){o.quantidade=Number(o.quantidade);db.desplaques.push(o);if(!await insert("desplaques",o))return}if(type==="banho"){if(!o.data_inicio||!o.data_fim||!o.total_telas){alert("Preencha início, fim e quantidade de telas do ciclo.");return}o.total_telas=Number(o.total_telas);db.banhos.push(o);if(!await insert("banhos_removedor",o))return}if(type==="descarte"){db.descartes.unshift(o);if(!await insert("quadros_descartados",o))return}closeModal();renderAll()}
 }
 function closeModal(){modal.classList.remove("open")}
 function openCatalog(type){
