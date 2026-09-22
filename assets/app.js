@@ -37,13 +37,15 @@ async function connectAndLoad(){
       supabaseClient.from("motivos").select("*").order("nome"),
       supabaseClient.from("tamanhos_tela").select("*").order("nome")
     ]);
-    if(!o.error && o.data) db.ocorrencias=o.data;
-    if(!d.error && d.data) db.desplaques=d.data;
-    if(!b.error && b.data) db.banhos=b.data;
-    if(!x.error && x.data) db.descartes=x.data;
-    if(!op.error && op.data?.length) db.operadores=op.data.map(r=>r.nome);
-    if(!mot.error && mot.data?.length) db.motivos=mot.data.map(r=>r.nome);
-    if(!tam.error && tam.data?.length) db.tamanhos=tam.data.map(r=>r.nome);
+    let erros=[];
+    if(!o.error && o.data) db.ocorrencias=o.data; else if(o.error) erros.push("telas_rasgadas: "+o.error.message);
+    if(!d.error && d.data) db.desplaques=d.data; else if(d.error) erros.push("desplaques: "+d.error.message);
+    if(!b.error && b.data) db.banhos=b.data; else if(b.error) erros.push("banhos_removedor: "+b.error.message);
+    if(!x.error && x.data) db.descartes=x.data; else if(x.error) erros.push("quadros_descartados: "+x.error.message);
+    if(!op.error && op.data?.length) db.operadores=op.data.map(r=>r.nome); else if(op.error) erros.push("operadores: "+op.error.message);
+    if(!mot.error && mot.data?.length) db.motivos=mot.data.map(r=>r.nome); else if(mot.error) erros.push("motivos: "+mot.error.message);
+    if(!tam.error && tam.data?.length) db.tamanhos=tam.data.map(r=>r.nome); else if(tam.error) erros.push("tamanhos_tela: "+tam.error.message);
+    if(erros.length){console.error("Falhas ao carregar do Supabase:",erros);alert("Algumas tabelas não carregaram do Supabase:\n\n"+erros.join("\n"))}
     setBadge(true);
   }catch(e){console.warn(e);setBadge(false)}
   document.getElementById("loginGate").classList.remove("open");
