@@ -1830,11 +1830,6 @@ const SEED = {
     },
     {
       "data_inicio": "2026-02-23",
-      "data_fim": null,
-      "total_telas": null
-    },
-    {
-      "data_inicio": "2026-02-23",
       "data_fim": "2026-03-09",
       "total_telas": 632
     },
@@ -1885,8 +1880,8 @@ const SEED = {
     },
     {
       "data_inicio": "2026-08-21",
-      "data_fim": null,
-      "total_telas": null
+      "data_fim": "2026-09-11",
+      "total_telas": 672
     }
   ],
   "descartes": [
