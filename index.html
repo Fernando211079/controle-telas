@@ -81,17 +81,26 @@
     </main>
   </div>
 
-  <div id="loginGate" class="gate">
+    <div id="loginGate" class="gate">
     <div class="gate-card">
       <div class="brand-mark gate-mark">I</div>
       <h2>Controle de Telas</h2>
       <p>Acesso restrito. Entre com sua conta para consultar e lançar registros.</p>
-      <button id="gateLoginBtn" class="primary">Entrar</button>
+      <form id="loginForm">
+        <label class="field full">E-mail<input type="email" name="email" required autocomplete="username"></label>
+        <label class="field full">Senha<input type="password" name="password" required autocomplete="current-password"></label>
+        <div id="loginError" style="color:#e1261c;display:none;margin:8px 0;font-size:14px"></div>
+        <button type="submit" class="primary">Entrar</button>
+      </form>
     </div>
   </div>
 
   <div id="modal" class="modal"><div class="modal-card"><div class="modal-head"><h2 id="modalTitle"></h2><button onclick="closeModal()">×</button></div><form id="modalForm"></form></div></div>
-  <script src="assets/vendor.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script>
+    window.SUPA_URL="https://mwrzgjuonnrwyijcmjfo.supabase.co";
+    window.SUPA_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im13cnpnanVvbm5yd3lpamNtamZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NTgyMzEsImV4cCI6MjEwNTIzNDIzMX0.l2wx0-lqas81lmmVBjAHzm_cWlUDf7GA9qK8nIUZnMs";
+  </script>
   <script src="assets/seed.js"></script>
   <script src="assets/app.js"></script>
 </body>
