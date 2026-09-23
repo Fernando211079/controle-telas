@@ -3,7 +3,14 @@ const monthShort=monthNames.map(x=>x.slice(0,3));
 let db={...SEED};
 let supabaseClient=null;
 let sessionLoaded=false;
-const S=window.__INDEMETAL_SUPA__||null;
+const SUPA_URL=window.SUPA_URL, SUPA_ANON_KEY=window.SUPA_ANON_KEY;
+
+async function bindingAvailable(){
+  try{
+    const r=await fetch(SUPA_URL+"/auth/v1/health",{headers:{apikey:SUPA_ANON_KEY},signal:AbortSignal.timeout(4000)});
+    return r.ok;
+  }catch(e){return false}
+}
 
 function norm(s){return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase()}
 function fmtDate(s){if(!s)return "—";let [y,m,d]=String(s).slice(0,10).split("-");return `${d}/${m}/${y}`}
