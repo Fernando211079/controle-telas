@@ -83,7 +83,6 @@ async function handleLogin(e){
 async function boot(){
   if(!SUPA_URL||!SUPA_ANON_KEY){setBadge(false);renderAll();return}
   supabaseClient=window.supabase.createClient(SUPA_URL,SUPA_ANON_KEY);
-  if(!await bindingAvailable()){setBadge(false);renderAll();return}
   await requireLogin();
 }
 
