@@ -62,18 +62,27 @@ function showGate(){document.getElementById("loginGate").classList.add("open")}
 
 async function requireLogin(){
   try{
-    const {data:{session}}=await S.supabase.auth.getSession();
+    const {data:{session}}=await supabaseClient.auth.getSession();
     if(session){await connectAndLoad();return}
     showGate();
-    S.supabase.auth.onAuthStateChange(async(e,s)=>{
+    supabaseClient.auth.onAuthStateChange(async(e,s)=>{
       if(s&&!sessionLoaded){sessionLoaded=true;await connectAndLoad()}
       if(e==="SIGNED_OUT")location.reload();
     });
   }catch(e){console.warn(e);setBadge(false);renderAll()}
 }
 
+async function handleLogin(e){
+  e.preventDefault();
+  const f=new FormData(loginForm), email=f.get("email"), password=f.get("password");
+  const box=document.getElementById("loginError"); box.style.display="none";
+  const {error}=await supabaseClient.auth.signInWithPassword({email,password});
+  if(error){box.textContent="Não foi possível entrar: "+error.message;box.style.display="block"}
+}
+
 async function boot(){
-  if(!S){setBadge(false);renderAll();return}
+  if(!SUPA_URL||!SUPA_ANON_KEY){setBadge(false);renderAll();return}
+  supabaseClient=window.supabase.createClient(SUPA_URL,SUPA_ANON_KEY);
   if(!await bindingAvailable()){setBadge(false);renderAll();return}
   await requireLogin();
 }
@@ -95,7 +104,7 @@ function setupNav(){
  document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>showPage(b.dataset.page));
  document.getElementById("reloadBtn").onclick=()=>renderAll();
  document.getElementById("logoutBtn").onclick=logout;
- document.getElementById("gateLoginBtn").onclick=()=>S&&S.auth.openSignInModal();
+  document.getElementById("loginForm").onsubmit=handleLogin;
  document.getElementById("searchOc").oninput=renderOcorrencias;
  document.getElementById("filterOcMonth").onchange=renderOcorrencias;
  document.getElementById("searchDesc").oninput=renderDescartes;
