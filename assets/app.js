@@ -33,7 +33,6 @@ function setBadge(live){
 }
 
 async function connectAndLoad(){
-  supabaseClient=S.supabase;
   try{
     const [o,d,b,x,op,mot,tam]=await Promise.all([
       supabaseClient.from("telas_rasgadas").select("*").order("data",{ascending:false}),
