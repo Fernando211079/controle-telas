@@ -1,64 +1,108 @@
 /* catalogo.js
-   - Coloca os cards Operadores / Motivos / Tamanhos dentro da tela "Telas rasgadas"
-   - Adiciona o botão de excluir (×) em cada item (aqui e na tela Cadastros)
+   - Botões Operadores / Motivos / Tamanhos na tela "Telas rasgadas" (ao lado de + Nova ocorrência)
+   - Cada botão abre uma janela para adicionar e excluir itens da lista
+   - Botão de excluir (×) também na tela Cadastros
    Carregar DEPOIS do app.js. */
 (function () {
-  // 1) Estilo do botão de excluir e da lista com rolagem
+  const TITULOS = { operadores: "Operadores", motivos: "Motivos", tamanhos: "Tamanhos" };
+  const SINGULAR = { operadores: "operador", motivos: "motivo", tamanhos: "tamanho" };
+  const TABELAS = { operadores: "operadores", motivos: "motivos", tamanhos: "tamanhos_tela" };
+  let catAtual = null;
+
+  // 1) Estilo
   const st = document.createElement("style");
   st.textContent = `
     .list-item{display:flex;align-items:center;justify-content:space-between;gap:8px}
     .del-btn{flex:none;width:26px;height:26px;border:0;border-radius:6px;background:#fdecea;color:#e1261c;font-size:17px;font-weight:700;line-height:1;cursor:pointer}
     .del-btn:hover{background:#e1261c;color:#fff}
-    .list.scroll{max-height:230px;overflow-y:auto}
-    .catalog-row{margin-bottom:18px}
+    .list.scroll{max-height:300px;overflow-y:auto}
+    .cat-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end}
   `;
   document.head.appendChild(st);
 
-  // 2) Cards de cadastro dentro da tela Telas rasgadas (logo abaixo do botão + Nova ocorrência)
+  // 2) Botões ao lado do "+ Nova ocorrência"
   const tools = document.querySelector("#page-ocorrencias .page-tools");
-  if (tools) {
-    const bloco = document.createElement("div");
-    bloco.className = "grid three catalog-row";
-    bloco.innerHTML = `
-      <article class="panel"><h2>Operadores</h2><div class="list scroll" id="ocOperatorsList"></div><button class="secondary" onclick="openCatalog('operadores')">+ Adicionar operador</button></article>
-      <article class="panel"><h2>Motivos</h2><div class="list scroll" id="ocReasonsList"></div><button class="secondary" onclick="openCatalog('motivos')">+ Adicionar motivo</button></article>
-      <article class="panel"><h2>Tamanhos</h2><div class="list scroll" id="ocSizesList"></div><button class="secondary" onclick="openCatalog('tamanhos')">+ Adicionar tamanho</button></article>
-    `;
-    tools.insertAdjacentElement("afterend", bloco);
+  const novaBtn = tools && tools.querySelector("button.primary");
+  if (novaBtn) {
+    const wrap = document.createElement("div");
+    wrap.className = "cat-actions";
+    novaBtn.parentNode.insertBefore(wrap, novaBtn);
+    Object.keys(TITULOS).forEach(tipo => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "primary";
+      b.textContent = TITULOS[tipo];
+      b.onclick = () => abrirCadastro(tipo);
+      wrap.appendChild(b);
+    });
+    wrap.appendChild(novaBtn);
   }
 
-  // 3) Nova versão do renderCadastros: preenche as duas telas e mostra o botão de excluir
+  // 3) Janela do cadastro
+  function abrirCadastro(tipo) {
+    catAtual = tipo;
+    document.getElementById("modalTitle").textContent = TITULOS[tipo];
+    const form = document.getElementById("modalForm");
+    form.innerHTML = `
+      <div class="form-grid"><label class="field full">Adicionar ${SINGULAR[tipo]}<input id="catNovo" placeholder="Digite o nome e tecle Enter" autocomplete="off"></label></div>
+      <div class="list scroll" id="catLista" style="margin-top:14px"></div>
+      <div class="form-actions"><button type="button" class="secondary" onclick="closeModal()">Fechar</button><button class="primary">Adicionar</button></div>`;
+    form.onsubmit = e => { e.preventDefault(); adicionar(); };
+    preencherLista();
+    document.getElementById("modal").classList.add("open");
+    setTimeout(() => { const i = document.getElementById("catNovo"); if (i) i.focus(); }, 50);
+  }
+
+  function itensHtml(tipo) {
+    const nomes = [...new Set(db[tipo])];
+    return nomes.length
+      ? nomes.map(x => `<div class="list-item"><span>${esc(x)}</span><button type="button" class="del-btn" data-type="${tipo}" data-name="${esc(x)}" title="Excluir">×</button></div>`).join("")
+      : '<div class="empty">Nenhum item.</div>';
+  }
+
+  function preencherLista() {
+    const el = document.getElementById("catLista");
+    if (el && catAtual) el.innerHTML = itensHtml(catAtual);
+  }
+
+  async function adicionar() {
+    const campo = document.getElementById("catNovo");
+    const valor = (campo.value || "").trim();
+    if (!valor) return;
+    if (db[catAtual].includes(valor)) { alert("Esse nome já está na lista."); return; }
+    if (!await insert(TABELAS[catAtual], { nome: valor })) return;
+    db[catAtual].push(valor);
+    db[catAtual].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    campo.value = "";
+    renderCadastros();
+    campo.focus();
+  }
+
+  // 4) Nova versão do renderCadastros (tela Cadastros + lista da janela)
   window.renderCadastros = function () {
-    const make = (type, ids) => {
-      const nomes = [...new Set(db[type])]; // tira nomes repetidos da exibição
-      const html = nomes.length
-        ? nomes.map(x => `<div class="list-item"><span>${esc(x)}</span><button type="button" class="del-btn" data-type="${type}" data-name="${esc(x)}" title="Excluir">×</button></div>`).join("")
-        : '<div class="empty">Nenhum item.</div>';
-      ids.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = html; });
-    };
-    make("operadores", ["operatorsList", "ocOperatorsList"]);
-    make("motivos", ["reasonsList", "ocReasonsList"]);
-    make("tamanhos", ["sizesList", "ocSizesList"]);
+    const make = (tipo, id) => { const el = document.getElementById(id); if (el) el.innerHTML = itensHtml(tipo); };
+    make("operadores", "operatorsList");
+    make("motivos", "reasonsList");
+    make("tamanhos", "sizesList");
+    preencherLista();
   };
 
-  // 4) Excluir item do cadastro
-  async function deleteCatalog(type, name) {
-    if (!confirm(`Excluir "${name}" da lista?\n\nOs registros antigos que já usam esse nome continuam no histórico.`)) return;
-    const table = { operadores: "operadores", motivos: "motivos", tamanhos: "tamanhos_tela" }[type];
+  // 5) Excluir item
+  async function excluir(tipo, nome) {
+    if (!confirm(`Excluir "${nome}" da lista?\n\nOs registros antigos que já usam esse nome continuam no histórico.`)) return;
     if (supabaseClient) {
-      const { data, error } = await supabaseClient.from(table).delete().eq("nome", name).select();
+      const { data, error } = await supabaseClient.from(TABELAS[tipo]).delete().eq("nome", nome).select();
       if (error) { alert("Não foi possível excluir: " + error.message); return; }
       if (!data || !data.length) { alert("Nada foi excluído. Provavelmente falta a permissão de exclusão no Supabase."); return; }
     }
-    db[type] = db[type].filter(x => x !== name);
+    db[tipo] = db[tipo].filter(x => x !== nome);
     renderCadastros();
   }
 
   document.addEventListener("click", e => {
     const b = e.target.closest(".del-btn");
-    if (b) deleteCatalog(b.dataset.type, b.dataset.name);
+    if (b) excluir(b.dataset.type, b.dataset.name);
   });
 
-  // Se os dados já tiverem carregado antes deste arquivo, atualiza as listas agora
-  try { renderCadastros(); } catch (e) { /* ainda sem dados, o app.js desenha depois */ }
+  try { renderCadastros(); } catch (e) { /* o app.js desenha depois */ }
 })();
