@@ -1,272 +1,304 @@
-const monthNames=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-const monthShort=monthNames.map(x=>x.slice(0,3));
-let db={...SEED};
-let supabaseClient=null;
-let sessionLoaded=false;
-const SUPA_URL=window.SUPA_URL, SUPA_ANON_KEY=window.SUPA_ANON_KEY;
+/* catalogo.js  (versão 3)
+   1) Botões Operadores / Motivos / Tamanhos ao lado de "+ Nova ocorrência" (abrem janela para adicionar e excluir)
+   2) Botões de EDITAR (✎) e EXCLUIR (×) em todas as tabelas de registros:
+      Telas rasgadas, Desplaque, Banho removedor e Quadros descartados
+   3) Busca ao vivo (enquanto digita) em Telas rasgadas e Quadros descartados
+   Carregar DEPOIS do app.js. */
+(function () {
+  const $ = id => document.getElementById(id);
+  const TITULOS = { operadores: "Operadores", motivos: "Motivos", tamanhos: "Tamanhos" };
+  const SINGULAR = { operadores: "operador", motivos: "motivo", tamanhos: "tamanho" };
+  const TABELAS = { operadores: "operadores", motivos: "motivos", tamanhos: "tamanhos_tela" };
+  const TAB = { ocorrencias: "telas_rasgadas", desplaques: "desplaques", banhos: "banhos_removedor", descartes: "quadros_descartados" };
+  let catAtual = null;
+  const regs = {};
 
-async function bindingAvailable(){
-  try{
-    const r=await fetch(SUPA_URL+"/auth/v1/health",{headers:{apikey:SUPA_ANON_KEY},signal:AbortSignal.timeout(4000)});
-    return r.ok;
-  }catch(e){return false}
-}
+  // Busca: cada palavra digitada precisa aparecer em algum lugar da linha (em qualquer ordem)
+  const combina = (busca, texto) => {
+    const t = norm(texto);
+    return norm(busca).split(/\s+/).filter(Boolean).every(p => t.includes(p));
+  };
+  const atrasar = (fn, ms) => { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms || 120); }; };
 
-function norm(s){return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase()}
-function fmtDate(s){if(!s)return "—";let [y,m,d]=String(s).slice(0,10).split("-");return `${d}/${m}/${y}`}
-function monthOf(s){return Number(String(s).slice(5,7))-1}
-function uid(){return crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()}
-function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+  // ---------- Estilo ----------
+  const st = document.createElement("style");
+  st.textContent = `
+    .list-item{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .del-btn{flex:none;width:26px;height:26px;border:0;border-radius:6px;background:#fdecea;color:#e1261c;font-size:17px;font-weight:700;line-height:1;cursor:pointer}
+    .del-btn:hover{background:#e1261c;color:#fff}
+    .list.scroll{max-height:300px;overflow-y:auto}
+    .cat-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end}
+    td.acoes{white-space:nowrap;text-align:right;width:1%}
+    .reg-btn{width:28px;height:28px;border:0;border-radius:6px;cursor:pointer;line-height:1;margin-left:6px;font-size:15px}
+    .reg-edit{background:#eef1f4;color:#17212b}
+    .reg-edit:hover{background:#17212b;color:#fff}
+    .reg-del{background:#fdecea;color:#e1261c;font-size:17px;font-weight:700}
+    .reg-del:hover{background:#e1261c;color:#fff}
+  `;
+  document.head.appendChild(st);
 
-async function bindingAvailable(){
-  try{
-    const r=await fetch(S.supabase.supabaseUrl+"/auth/v1/health",{headers:{apikey:S.supabase.supabaseKey},signal:AbortSignal.timeout(4000)});
-    return r.ok;
-  }catch(e){return false}
-}
+  // ---------- insert: passa a guardar o "id" do registro salvo (necessário para editar/excluir) ----------
+  window.insert = async function (table, payload) {
+    if (!supabaseClient) return true;
+    const { data, error } = await supabaseClient.from(table).insert(payload).select();
+    if (error) { alert("Não foi possível salvar no Supabase: " + error.message); return false; }
+    if (data && data[0] && payload && !Array.isArray(payload)) Object.assign(payload, data[0]);
+    return true;
+  };
 
-function setBadge(live){
-  const b=document.getElementById("connectionBadge");
-  b.textContent=live?"Supabase conectado":"Modo demonstração";
-  b.className="badge "+(live?"live":"demo");
-  document.getElementById("logoutBtn").style.display=live?"":"none";
-}
-
-async function connectAndLoad(){
-  try{
-    const [o,d,b,x,op,mot,tam]=await Promise.all([
-      supabaseClient.from("telas_rasgadas").select("*").order("data",{ascending:false}),
-      supabaseClient.from("desplaques").select("*").order("data",{ascending:false}),
-      supabaseClient.from("banhos_removedor").select("*").order("data_inicio",{ascending:false}),
-      supabaseClient.from("quadros_descartados").select("*").order("data",{ascending:false}),
-      supabaseClient.from("operadores").select("*").order("nome"),
-      supabaseClient.from("motivos").select("*").order("nome"),
-      supabaseClient.from("tamanhos_tela").select("*").order("nome")
-    ]);
-    let erros=[];
-    if(!o.error && o.data) db.ocorrencias=o.data; else if(o.error) erros.push("telas_rasgadas: "+o.error.message);
-    if(!d.error && d.data) db.desplaques=d.data; else if(d.error) erros.push("desplaques: "+d.error.message);
-    if(!b.error && b.data) db.banhos=b.data; else if(b.error) erros.push("banhos_removedor: "+b.error.message);
-    if(!x.error && x.data) db.descartes=x.data; else if(x.error) erros.push("quadros_descartados: "+x.error.message);
-    if(!op.error && op.data?.length) db.operadores=op.data.map(r=>r.nome); else if(op.error) erros.push("operadores: "+op.error.message);
-    if(!mot.error && mot.data?.length) db.motivos=mot.data.map(r=>r.nome); else if(mot.error) erros.push("motivos: "+mot.error.message);
-    if(!tam.error && tam.data?.length) db.tamanhos=tam.data.map(r=>r.nome); else if(tam.error) erros.push("tamanhos_tela: "+tam.error.message);
-    if(erros.length){console.error("Falhas ao carregar do Supabase:",erros);alert("Algumas tabelas não carregaram do Supabase:\n\n"+erros.join("\n"))}
-    setBadge(true);
-  }catch(e){console.warn(e);setBadge(false)}
-  document.getElementById("loginGate").classList.remove("open");
-  renderAll();
-}
-
-function showGate(){document.getElementById("loginGate").classList.add("open")}
-
-async function requireLogin(){
-  try{
-    const {data:{session}}=await supabaseClient.auth.getSession();
-    if(session){await connectAndLoad();return}
-    showGate();
-    supabaseClient.auth.onAuthStateChange(async(e,s)=>{
-      if(s&&!sessionLoaded){sessionLoaded=true;await connectAndLoad()}
-      if(e==="SIGNED_OUT")location.reload();
+  // =====================================================================
+  // PARTE 1 — CADASTROS (operadores, motivos, tamanhos)
+  // =====================================================================
+  const tools = document.querySelector("#page-ocorrencias .page-tools");
+  const novaBtn = tools && tools.querySelector("button.primary");
+  if (novaBtn) {
+    const wrap = document.createElement("div");
+    wrap.className = "cat-actions";
+    novaBtn.parentNode.insertBefore(wrap, novaBtn);
+    Object.keys(TITULOS).forEach(tipo => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "primary";
+      b.textContent = TITULOS[tipo];
+      b.onclick = () => abrirCadastro(tipo);
+      wrap.appendChild(b);
     });
-  }catch(e){console.warn(e);setBadge(false);renderAll()}
-}
+    wrap.appendChild(novaBtn);
+  }
 
-async function handleLogin(e){
-  e.preventDefault();
-  const f=new FormData(loginForm), email=f.get("email"), password=f.get("password");
-  const box=document.getElementById("loginError"); box.style.display="none";
-  const {error}=await supabaseClient.auth.signInWithPassword({email,password});
-  if(error){box.textContent="Não foi possível entrar: "+error.message;box.style.display="block"}
-}
+  function abrirCadastro(tipo) {
+    catAtual = tipo;
+    $("modalTitle").textContent = TITULOS[tipo];
+    const form = $("modalForm");
+    form.innerHTML = `
+      <div class="form-grid"><label class="field full">Adicionar ${SINGULAR[tipo]}<input id="catNovo" placeholder="Digite o nome e tecle Enter" autocomplete="off"></label></div>
+      <div class="list scroll" id="catLista" style="margin-top:14px"></div>
+      <div class="form-actions"><button type="button" class="secondary" onclick="closeModal()">Fechar</button><button class="primary">Adicionar</button></div>`;
+    form.onsubmit = e => { e.preventDefault(); adicionar(); };
+    preencherLista();
+    $("modal").classList.add("open");
+    setTimeout(() => { const i = $("catNovo"); if (i) i.focus(); }, 50);
+  }
 
-async function boot(){
-  if(!SUPA_URL||!SUPA_ANON_KEY){setBadge(false);renderAll();return}
-  supabaseClient=window.supabase.createClient(SUPA_URL,SUPA_ANON_KEY);
-  await requireLogin();
-}
+  function itensHtml(tipo) {
+    const nomes = [...new Set(db[tipo])];
+    return nomes.length
+      ? nomes.map(x => `<div class="list-item"><span>${esc(x)}</span><button type="button" class="del-btn" data-type="${tipo}" data-name="${esc(x)}" title="Excluir">×</button></div>`).join("")
+      : '<div class="empty">Nenhum item.</div>';
+  }
 
-async function logout(){
-  if(!supabaseClient)return;
-  await supabaseClient.auth.signOut();
-  location.reload();
-}
+  function preencherLista() {
+    const el = $("catLista");
+    if (el && catAtual) el.innerHTML = itensHtml(catAtual);
+  }
 
-async function insert(table,payload){
-  if(!supabaseClient) return true;
-  const {error}=await supabaseClient.from(table).insert(payload);
-  if(error){alert("Não foi possível salvar no Supabase: "+error.message);return false}
-  return true;
-}
+  async function adicionar() {
+    const campo = $("catNovo");
+    const valor = (campo.value || "").trim();
+    if (!valor) return;
+    if (db[catAtual].includes(valor)) { alert("Esse nome já está na lista."); return; }
+    if (!await insert(TABELAS[catAtual], { nome: valor })) return;
+    db[catAtual].push(valor);
+    db[catAtual].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    campo.value = "";
+    renderCadastros();
+    campo.focus();
+  }
 
-function setupNav(){
- document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>showPage(b.dataset.page));
- document.getElementById("reloadBtn").onclick=()=>renderAll();
- document.getElementById("logoutBtn").onclick=logout;
-  document.getElementById("loginForm").onsubmit=handleLogin;
- document.getElementById("searchOc").oninput=renderOcorrencias;
- document.getElementById("filterOcMonth").onchange=renderOcorrencias;
- document.getElementById("searchDesc").oninput=renderDescartes;
- document.getElementById("filterDescYear").onchange=renderDescartes;
- document.getElementById("dashYear").onchange=renderDashboard;
- document.getElementById("dashMonth").onchange=renderDashboard;
- document.getElementById("despYear").onchange=renderDesplaques;
-}
-function showPage(p){
- document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
- document.getElementById("page-"+p).classList.add("active");
- document.querySelectorAll(".nav").forEach(x=>x.classList.toggle("active",x.dataset.page===p));
- const titles={dashboard:"Dashboard",ocorrencias:"Telas rasgadas",desplaques:"Desplaque",banhos:"Banho removedor",descartes:"Quadros descartados",cadastros:"Cadastros"};
- document.getElementById("pageTitle").textContent=titles[p];
- renderAll();
-}
-function fillFilters(){
- let years=[...new Set([...db.ocorrencias,...db.descartes].map(x=>String(x.data).slice(0,4)).filter(Boolean))].sort();
- if(!years.includes("2026"))years.push("2026");
- let curY=dashYear.value||years[years.length-1], curM=dashMonth.value||"all";
- let curOcM=filterOcMonth.value||"all", curDY=filterDescYear.value||String(years[years.length-1]);
- let curDespY=despYear.value||years[years.length-1];
- despYear.innerHTML=years.map(y=>`<option>${y}</option>`).join("");
- despYear.value=curDespY;
- dashYear.innerHTML=years.map(y=>`<option>${y}</option>`).join("");
- dashYear.value=curY;
- dashMonth.innerHTML='<option value="all">Todos</option>'+monthNames.map((m,i)=>`<option value="${i}">${m}</option>`).join("");
- dashMonth.value=curM;
- filterOcMonth.innerHTML='<option value="all">Todos os meses</option>'+monthNames.map((m,i)=>`<option value="${i}">${m}</option>`).join("");
- filterOcMonth.value=curOcM;
- filterDescYear.innerHTML='<option value="all">Todos os anos</option>'+years.map(y=>`<option>${y}</option>`).join("");
- filterDescYear.value=curDY;
-}
-function renderAll(){fillFilters();renderDashboard();renderOcorrencias();renderDesplaques();renderBanhos();renderDescartes();renderCadastros()}
-function filteredOcc(){
- let y=dashYear.value||"2026", m=dashMonth.value||"all";
- return db.ocorrencias.filter(x=>String(x.data).startsWith(y+"-")&&(m==="all"||monthOf(x.data)==Number(m)));
-}
-function filteredDesp(y,m){
- return db.desplaques.filter(x=>x.data&&String(x.data).startsWith(y+"-")&&(m==="all"||monthOf(x.data)==Number(m)));
-}
-function card(label,value,hint="",icon=""){return `<div class="card"><div class="card-top">${icon?`<span class="card-ico">${icon}</span>`:""}<span class="label">${label}</span></div><div class="value">${value}</div><div class="hint">${hint}</div></div>`}
-function renderDashboard(){
- let data=filteredOcc();
- let y=dashYear.value||"2026", m=dashMonth.value||"all";
- let des=filteredDesp(y,m);
- let et=des.filter(x=>norm(x.unidade)==="etiquetas").reduce((a,x)=>a+Number(x.quantidade||0),0);
- let gr=des.filter(x=>norm(x.unidade)==="graficos").reduce((a,x)=>a+Number(x.quantidade||0),0);
- let st=bathStats();
- document.getElementById("kpis").innerHTML=
-  card("Telas rasgadas",data.length,"período selecionado","⚠")+
-  card("Desplaque",(et+gr).toLocaleString("pt-BR"),m==="all"?("total de "+y):"período selecionado","◎")+
-  card("Banho removedor",st.avg!=null?st.avg.toLocaleString("pt-BR")+" méd.":"—",st.last?`último ciclo: ${st.last.total_telas??"—"} telas${st.lastDur!=null?" em "+st.lastDur+" dias":""}`:"sem registros","◷")+
-  card("Quadros descartados",db.descartes.filter(x=>String(x.data).startsWith(y)).length,"no ano selecionado","▣");
- renderBars("reasonBars",groupCount(data,"motivo"),"motivo");
- renderBars("operatorBars",groupCount(data,"operador"),"operador");
- drawLine("monthlyChart",[{color:"#e1261c",vals:Array.from({length:12},(_,i)=>data.filter(x=>monthOf(x.data)===i).length)}],monthShort,true);
- drawLine("desplaqueChart",[
-  {color:"#e1261c",vals:monthNames.map((_,i)=>des.filter(x=>monthOf(x.data)===i&&norm(x.unidade)==="etiquetas").reduce((a,x)=>a+Number(x.quantidade||0),0))},
-  {color:"#17212b",vals:monthNames.map((_,i)=>des.filter(x=>monthOf(x.data)===i&&norm(x.unidade)==="graficos").reduce((a,x)=>a+Number(x.quantidade||0),0))}
- ],monthShort,false);
-}
-function groupCount(arr,key){let c={};arr.forEach(x=>{let k=x[key]||"Não informado";c[k]=(c[k]||0)+1});return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,12)}
-function renderBars(id,items,label){
- let max=items[0]?.[1]||1;
- document.getElementById(id).innerHTML=items.length?items.map(([n,v])=>`<div class="bar-row"><span title="${esc(n)}">${esc(n)}</span><div class="bar-track"><div class="bar-fill" style="width:${v/max*100}%"></div></div><span>${v}</span></div>`).join(""):'<div class="empty">Sem dados.</div>';
-}
-function drawLine(id,series,labels,area=true){
- const c=document.getElementById(id),ctx=c.getContext("2d"),w=c.clientWidth||500,h=c.clientHeight||250,dpr=devicePixelRatio||1;
- c.width=w*dpr;c.height=h*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);
- const pad={l:36,r:16,t:24,b:26};
- const rawMax=Math.max(1,...series.flatMap(s=>s.vals));
- const nice=rawMax<=4?4:Math.ceil(rawMax/4)*4;
- const X=i=>pad.l+(w-pad.l-pad.r)*(i/(labels.length-1||1));
- const Y=v=>pad.t+(h-pad.t-pad.b)*(1-v/nice);
- ctx.font="10px Saira,Segoe UI";
- ctx.setLineDash([3,4]);ctx.strokeStyle="#dde3e8";ctx.lineWidth=1;ctx.fillStyle="#98a2ab";
- for(let i=0;i<=3;i++){const y=pad.t+(h-pad.t-pad.b)*i/3;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(String(Math.round(nice*(1-i/3))),6,y+3)}
- ctx.setLineDash([]);
- ctx.fillStyle="#98a2ab";labels.forEach((l,i)=>ctx.fillText(l,X(i)-7,h-8));
- const curve=pts=>{ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1],cx=(a.x+b.x)/2;ctx.bezierCurveTo(cx,a.y,cx,b.y,b.x,b.y)}};
- series.forEach((s,si)=>{
-  const pts=s.vals.map((v,i)=>({x:X(i),y:Y(v)}));
-  if(area){const g=ctx.createLinearGradient(0,pad.t,0,h-pad.b);g.addColorStop(0,s.color+"2e");g.addColorStop(1,s.color+"00");curve(pts);ctx.lineTo(pts[pts.length-1].x,h-pad.b);ctx.lineTo(pts[0].x,h-pad.b);ctx.closePath();ctx.fillStyle=g;ctx.fill()}
-  curve(pts);ctx.strokeStyle=s.color;ctx.lineWidth=2.5;ctx.lineJoin="round";ctx.lineCap="round";ctx.stroke();
-  pts.forEach((p,i)=>{
-   const v=s.vals[i];
-   ctx.beginPath();ctx.arc(p.x,p.y,3.6,0,Math.PI*2);ctx.fillStyle="#fff";ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=s.color;ctx.stroke();
-   if(!v)return;
-   let lx=p.x,ly=p.y-9;
-   if(si===1&&series[0].vals[i]===v)lx=p.x+15;
-   ctx.font="700 10px Saira,Segoe UI";ctx.textAlign="center";ctx.fillStyle=s.color;
-   ctx.fillText(String(v),lx,ly);ctx.textAlign="left";
+  window.renderCadastros = function () {
+    const make = (tipo, id) => { const el = $(id); if (el) el.innerHTML = itensHtml(tipo); };
+    make("operadores", "operatorsList");
+    make("motivos", "reasonsList");
+    make("tamanhos", "sizesList");
+    preencherLista();
+  };
+
+  async function excluirNome(tipo, nome) {
+    if (!confirm(`Excluir "${nome}" da lista?\n\nOs registros antigos que já usam esse nome continuam no histórico.`)) return;
+    if (supabaseClient) {
+      const { data, error } = await supabaseClient.from(TABELAS[tipo]).delete().eq("nome", nome).select();
+      if (error) { alert("Não foi possível excluir: " + error.message); return; }
+      if (!data || !data.length) { alert("Nada foi excluído. Provavelmente falta a permissão de exclusão no Supabase."); return; }
+    }
+    db[tipo] = db[tipo].filter(x => x !== nome);
+    renderCadastros();
+  }
+
+  // =====================================================================
+  // PARTE 2 — EDITAR / EXCLUIR REGISTROS DAS TABELAS
+  // =====================================================================
+  function desenhar(tbodyId, tab, arr, celulas, colunas) {
+    const tb = $(tbodyId);
+    const tr = tb.closest("table").querySelector("thead tr");
+    if (tr && !tr.dataset.acoes) {
+      const th = document.createElement("th");
+      th.textContent = "Ações";
+      tr.appendChild(th);
+      tr.dataset.acoes = "1";
+    }
+    regs[tab] = arr;
+    tb.innerHTML = arr.length
+      ? arr.map((x, i) => `<tr>${celulas(x)}<td class="acoes"><button type="button" class="reg-btn reg-edit" data-act="edit" data-tab="${tab}" data-i="${i}" title="Editar">✎</button><button type="button" class="reg-btn reg-del" data-act="del" data-tab="${tab}" data-i="${i}" title="Excluir">×</button></td></tr>`).join("")
+      : `<tr><td colspan="${colunas + 1}" class="empty">Nenhum registro encontrado.</td></tr>`;
+  }
+
+  // --- Telas rasgadas
+  window.renderOcorrencias = function () {
+    const q = $("searchOc").value, m = $("filterOcMonth").value;
+    const arr = db.ocorrencias
+      .filter(x => (m === "all" || monthOf(x.data) == Number(m)) && (!q.trim() || combina(q, [x.operador, x.motivo, x.tamanho, x.observacao, fmtDate(x.data)].join(" "))))
+      .sort((a, b) => String(b.data).localeCompare(String(a.data)));
+    desenhar("ocTable", "ocorrencias", arr,
+      x => `<td>${fmtDate(x.data)}</td><td><strong>${esc(x.operador)}</strong></td><td>${esc(x.motivo)}</td><td>${esc(x.tamanho)}</td><td>${esc(x.observacao)}</td>`, 5);
+  };
+
+  // --- Desplaque
+  const origDesplaques = window.renderDesplaques;
+  window.renderDesplaques = function () {
+    origDesplaques();
+    const y = $("despYear").value || "2026";
+    const arr = db.desplaques.filter(x => despYearOf(x) === y)
+      .sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
+    desenhar("despTable", "desplaques", arr,
+      x => `<td>${fmtDate(x.data || x.mes)}</td><td>${esc(x.unidade)}</td><td><strong>${Number(x.quantidade || 0).toLocaleString("pt-BR")}</strong></td>`, 3);
+  };
+
+  // --- Banho removedor
+  const origBanhos = window.renderBanhos;
+  window.renderBanhos = function () {
+    origBanhos();
+    const arr = [...db.banhos].sort((a, b) => String(b.data_inicio || "").localeCompare(String(a.data_inicio || "")));
+    desenhar("bathTable", "banhos", arr, x => {
+      const dur = bathDuration(x);
+      return `<td>${fmtDate(x.data_inicio)}</td><td>${fmtDate(x.data_fim)}</td><td>${dur != null ? dur + " dias" : "—"}</td><td>${x.total_telas ?? "—"}</td>`;
+    }, 4);
+  };
+
+  // --- Quadros descartados
+  const origDescartes = window.renderDescartes;
+  window.renderDescartes = function () {
+    origDescartes();
+    const q = $("searchDesc").value, y = $("filterDescYear").value;
+    const arr = db.descartes
+      .filter(x => (y === "all" || String(x.data).startsWith(y)) && (!q.trim() || combina(q, [x.tamanho, x.motivo, x.observacao, fmtDate(x.data)].join(" "))))
+      .sort((a, b) => String(b.data).localeCompare(String(a.data)));
+    desenhar("descTable", "descartes", arr,
+      x => `<td>${fmtDate(x.data)}</td><td>${esc(x.tamanho)}</td><td>${esc(x.motivo)}</td><td>${esc(x.observacao)}</td>`, 4);
+  };
+
+  // Os campos de busca/filtro guardaram a função antiga; ligar de novo nas novas
+  $("searchOc").oninput = atrasar(() => renderOcorrencias());
+  $("searchOc").placeholder = "Pesquisar operador, motivo, tamanho, data...";
+  $("searchOc").autocomplete = "off";
+  $("filterOcMonth").onchange = renderOcorrencias;
+  $("searchDesc").oninput = atrasar(() => renderDescartes());
+  $("searchDesc").placeholder = "Pesquisar tamanho, motivo, data...";
+  $("searchDesc").autocomplete = "off";
+  $("filterDescYear").onchange = renderDescartes;
+  $("despYear").onchange = renderDesplaques;
+
+  // --- Formulários de edição
+  const dt = v => (v ? String(v).slice(0, 10) : "");
+  const sel = (name, lista, atual) => {
+    const l = [...new Set(lista)];
+    if (atual && !l.includes(atual)) l.unshift(atual);
+    return `<select name="${name}">${l.map(x => `<option${x === atual ? " selected" : ""}>${esc(x)}</option>`).join("")}</select>`;
+  };
+
+  const CFG = {
+    ocorrencias: {
+      titulo: "Editar tela rasgada",
+      resumo: r => `${fmtDate(r.data)} — ${r.operador} — ${r.motivo}`,
+      form: r => `<div class="form-grid">
+        <label class="field">Data<input type="date" name="data" value="${dt(r.data)}" required></label>
+        <label class="field">Operador${sel("operador", db.operadores, r.operador)}</label>
+        <label class="field">Motivo${sel("motivo", db.motivos, r.motivo)}</label>
+        <label class="field">Tamanho${sel("tamanho", db.tamanhos, r.tamanho)}</label>
+        <label class="field full">Observação<textarea name="observacao" rows="3">${esc(r.observacao)}</textarea></label></div>`,
+      valores: f => ({ data: f.get("data"), operador: f.get("operador"), motivo: f.get("motivo"), tamanho: f.get("tamanho"), observacao: f.get("observacao") })
+    },
+    desplaques: {
+      titulo: "Editar desplaque",
+      resumo: r => `${fmtDate(r.data || r.mes)} — ${r.unidade} — ${r.quantidade}`,
+      form: r => `<div class="form-grid">
+        <label class="field">Data<input type="date" name="data" value="${dt(r.data)}" required></label>
+        <label class="field">Unidade${sel("unidade", ["Etiquetas", "Gráficos"], r.unidade)}</label>
+        <label class="field full">Quantidade<input type="number" name="quantidade" min="1" value="${esc(r.quantidade)}" required></label></div>`,
+      valores: f => ({ data: f.get("data"), unidade: f.get("unidade"), quantidade: Number(f.get("quantidade")) })
+    },
+    banhos: {
+      titulo: "Editar troca de banho",
+      resumo: r => `${fmtDate(r.data_inicio)} a ${fmtDate(r.data_fim)} — ${r.total_telas} telas`,
+      form: r => `<div class="form-grid">
+        <label class="field">Início<input type="date" name="data_inicio" value="${dt(r.data_inicio)}" required></label>
+        <label class="field">Fim<input type="date" name="data_fim" value="${dt(r.data_fim)}" required></label>
+        <label class="field full">Quantidade de telas do ciclo<input type="number" name="total_telas" min="1" value="${esc(r.total_telas)}" required></label></div>`,
+      valores: f => ({ data_inicio: f.get("data_inicio"), data_fim: f.get("data_fim"), total_telas: Number(f.get("total_telas")) })
+    },
+    descartes: {
+      titulo: "Editar quadro descartado",
+      resumo: r => `${fmtDate(r.data)} — ${r.tamanho} — ${r.motivo}`,
+      form: r => `<div class="form-grid">
+        <label class="field">Data<input type="date" name="data" value="${dt(r.data)}" required></label>
+        <label class="field">Tamanho${sel("tamanho", db.tamanhos, r.tamanho)}</label>
+        <label class="field full">Motivo<input name="motivo" value="${esc(r.motivo)}"></label>
+        <label class="field full">Observação<textarea name="observacao" rows="3">${esc(r.observacao)}</textarea></label></div>`,
+      valores: f => ({ data: f.get("data"), tamanho: f.get("tamanho"), motivo: f.get("motivo"), observacao: f.get("observacao") })
+    }
+  };
+
+  function semId() {
+    alert("Este registro ainda não tem identificador. Recarregue a página (F5) e tente de novo.");
+  }
+
+  function editar(tab, r) {
+    const cfg = CFG[tab];
+    catAtual = null;
+    $("modalTitle").textContent = cfg.titulo;
+    const form = $("modalForm");
+    form.innerHTML = cfg.form(r) + `<div class="form-actions"><button type="button" class="secondary" onclick="closeModal()">Cancelar</button><button class="primary">Salvar alterações</button></div>`;
+    form.onsubmit = async ev => {
+      ev.preventDefault();
+      const novo = cfg.valores(new FormData(form));
+      if (supabaseClient) {
+        if (r.id == null) { semId(); return; }
+        const { data, error } = await supabaseClient.from(TAB[tab]).update(novo).eq("id", r.id).select();
+        if (error) { alert("Não foi possível salvar: " + error.message); return; }
+        if (!data || !data.length) { alert("Nada foi alterado. Provavelmente falta a permissão de edição no Supabase."); return; }
+        Object.assign(r, data[0]);
+      } else {
+        Object.assign(r, novo);
+      }
+      closeModal();
+      renderAll();
+    };
+    $("modal").classList.add("open");
+  }
+
+  async function excluirRegistro(tab, r) {
+    if (!confirm("Excluir este registro?\n\n" + CFG[tab].resumo(r))) return;
+    if (supabaseClient) {
+      if (r.id == null) { semId(); return; }
+      const { data, error } = await supabaseClient.from(TAB[tab]).delete().eq("id", r.id).select();
+      if (error) { alert("Não foi possível excluir: " + error.message); return; }
+      if (!data || !data.length) { alert("Nada foi excluído. Provavelmente falta a permissão de exclusão no Supabase."); return; }
+    }
+    db[tab] = db[tab].filter(x => x !== r);
+    renderAll();
+  }
+
+  // ---------- Cliques ----------
+  document.addEventListener("click", e => {
+    const d = e.target.closest(".del-btn");
+    if (d) { excluirNome(d.dataset.type, d.dataset.name); return; }
+    const b = e.target.closest(".reg-btn");
+    if (!b) return;
+    const r = (regs[b.dataset.tab] || [])[Number(b.dataset.i)];
+    if (!r) return;
+    if (b.dataset.act === "edit") editar(b.dataset.tab, r);
+    else excluirRegistro(b.dataset.tab, r);
   });
- });
-}
-function renderOcorrencias(){
- let q=norm(document.getElementById("searchOc").value),m=document.getElementById("filterOcMonth").value;
- let arr=db.ocorrencias.filter(x=>(m==="all"||monthOf(x.data)==Number(m))&&(!q||norm(x.operador+" "+x.motivo+" "+x.tamanho).includes(q))).sort((a,b)=>b.data.localeCompare(a.data));
- document.getElementById("ocTable").innerHTML=arr.map(x=>`<tr><td>${fmtDate(x.data)}</td><td><strong>${esc(x.operador)}</strong></td><td>${esc(x.motivo)}</td><td>${esc(x.tamanho)}</td><td>${esc(x.observacao)}</td></tr>`).join("")||'<tr><td colspan="5" class="empty">Nenhum registro encontrado.</td></tr>';
-}
-function despYearOf(x){return x.data?String(x.data).slice(0,4):"2026"}
-function despMonthIdx(x){return x.data?monthOf(x.data):monthNames.findIndex(m=>norm(m)===norm(x.mes))}
-function renderDesplaques(){
- let y=despYear.value||"2026";
- let rows=db.desplaques.filter(x=>despYearOf(x)===y);
- let sum=(arr,un)=>arr.filter(x=>norm(x.unidade)===un).reduce((a,x)=>a+Number(x.quantidade||0),0);
- let te=0,tg=0;
- let body=monthNames.map((m,i)=>{let rs=rows.filter(x=>despMonthIdx(x)===i);let e=sum(rs,"etiquetas"),g=sum(rs,"graficos");te+=e;tg+=g;let t=e+g;return t?`<tr><td>${m}</td><td>${e.toLocaleString("pt-BR")}</td><td>${g.toLocaleString("pt-BR")}</td><td><strong>${t.toLocaleString("pt-BR")}</strong></td></tr>`:""}).join("");
- document.getElementById("despPivot").innerHTML=te+tg?`<table class="pivot"><thead><tr><th>Mês</th><th>Etiquetas</th><th>Gráficos</th><th>Total</th></tr></thead><tbody>${body}</tbody><tfoot><tr><td>Total ${y}</td><td>${te.toLocaleString("pt-BR")}</td><td>${tg.toLocaleString("pt-BR")}</td><td>${(te+tg).toLocaleString("pt-BR")}</td></tr></tfoot></table>`:'<div class="empty">Sem lançamentos neste ano.</div>';
- document.getElementById("despKpis").innerHTML=card("Etiquetas",te.toLocaleString("pt-BR"),"telas desplacadas em "+y,"◎")+card("Gráficos",tg.toLocaleString("pt-BR"),"telas desplacadas em "+y,"▨")+card("Total",(te+tg).toLocaleString("pt-BR"),"todas as unidades","Σ");
- let arr=rows.sort((a,b)=>String(b.data||"").localeCompare(String(a.data||"")));
- document.getElementById("despTable").innerHTML=arr.map(x=>`<tr><td>${fmtDate(x.data||x.mes)}</td><td>${esc(x.unidade)}</td><td><strong>${Number(x.quantidade||0).toLocaleString("pt-BR")}</strong></td></tr>`).join("");
-}
-function bathDuration(x){
- if(!x.data_fim||!x.data_inicio)return null;
- return Math.max(0,Math.round((new Date(x.data_fim)-new Date(x.data_inicio))/86400000));
-}
-function bathStats(){
- let valid=db.banhos.filter(x=>x.data_inicio&&x.total_telas!=null);
- let avg=valid.length?Math.round(valid.reduce((a,x)=>a+Number(x.total_telas||0),0)/valid.length):null;
- let complete=db.banhos.filter(x=>x.data_fim&&x.total_telas!=null);
- let last=[...complete].sort((a,b)=>String(b.data_fim||"").localeCompare(String(a.data_fim||"")))[0]
-  ||[...db.banhos].sort((a,b)=>String(b.data_inicio||"").localeCompare(String(a.data_inicio||"")))[0];
- return {avg,last,lastDur:last?bathDuration(last):null};
-}
-function renderBanhos(){
- let arr=[...db.banhos].sort((a,b)=>String(b.data_inicio||"").localeCompare(String(a.data_inicio||"")));
- let st=bathStats();
- document.getElementById("currentBath").innerHTML=st.last?
-  `<div class="eyebrow">RESUMO</div><h2>Média de ${st.avg!=null?st.avg.toLocaleString("pt-BR"):"—"} telas por ciclo</h2><p>Último ciclo: ${fmtDate(st.last.data_inicio)} a ${fmtDate(st.last.data_fim)} (${st.lastDur!=null?st.lastDur+" dias":"—"}) — <strong>${st.last.total_telas??"—"} telas</strong>.</p>`
-  :`<div class="eyebrow">BANHO</div><h2>Nenhum ciclo registrado</h2><p>Registre uma troca para começar.</p>`;
- document.getElementById("bathTable").innerHTML=arr.map(x=>{let dur=bathDuration(x);return `<tr><td>${fmtDate(x.data_inicio)}</td><td>${fmtDate(x.data_fim)}</td><td>${dur!=null?dur+" dias":"—"}</td><td>${x.total_telas??"—"}</td></tr>`}).join("");
-}
-function renderDescartes(){
- let q=norm(document.getElementById("searchDesc").value), y=document.getElementById("filterDescYear").value;
- let arr=db.descartes.filter(x=>(y==="all"||String(x.data).startsWith(y))&&(!q||norm(x.tamanho+" "+x.motivo).includes(q))).sort((a,b)=>b.data.localeCompare(a.data));
- let total=arr.length, last=arr.filter(x=>String(x.data).startsWith("2026")).length;
- document.getElementById("descKpis").innerHTML=card("Registros",total,"filtro atual","▣")+card("2026",last,"histórico do ano","◷")+card("Tamanhos",new Set(arr.map(x=>x.tamanho)).size,"dimensões diferentes","⌀");
- document.getElementById("descTable").innerHTML=arr.map(x=>`<tr><td>${fmtDate(x.data)}</td><td>${esc(x.tamanho)}</td><td>${esc(x.motivo)}</td><td>${esc(x.observacao)}</td></tr>`).join("")||'<tr><td colspan="4" class="empty">Nenhum registro encontrado.</td></tr>';
-}
-function renderCadastros(){
- const make=(arr,id)=>document.getElementById(id).innerHTML=arr.map(x=>`<div class="list-item"><span>${esc(x)}</span><span class="mini">ativo</span></div>`).join("");
- make(db.operadores,"operatorsList");make(db.motivos,"reasonsList");make(db.tamanhos,"sizesList");
-}
-function openModal(type){
- const titles={ocorrencia:"Nova tela rasgada",desplaque:"Novo desplaque",banho:"Registrar troca de banho",descarte:"Novo quadro descartado"};
- modalTitle.textContent=titles[type];
- let html="";
- if(type==="ocorrencia")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Operador<select name="operador">${db.operadores.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field">Motivo<select name="motivo">${db.motivos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field">Tamanho<select name="tamanho">${db.tamanhos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field full">Observação<textarea name="observacao" rows="3"></textarea></label></div>`;
- if(type==="desplaque")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Unidade<select name="unidade"><option>Etiquetas</option><option>Gráficos</option></select></label><label class="field full">Quantidade<input type="number" name="quantidade" min="1" required></label></div>`;
- if(type==="banho")html=`<div class="form-grid"><label class="field">Início<input type="date" name="data_inicio" required></label><label class="field">Fim<input type="date" name="data_fim" required></label><label class="field full">Quantidade de telas do ciclo<input type="number" name="total_telas" min="1" required></label></div>`;
- if(type==="descarte")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Tamanho<select name="tamanho">${db.tamanhos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field full">Motivo<input name="motivo" value=""></label><label class="field full">Observação<textarea name="observacao" rows="3"></textarea></label></div>`;
- modalForm.innerHTML=html+`<div class="form-actions"><button type="button" class="secondary" onclick="closeModal()">Cancelar</button><button class="primary">Salvar</button></div>`;
- modal.classList.add("open");
- modalForm.onsubmit=async e=>{e.preventDefault();let f=new FormData(modalForm),o=Object.fromEntries(f.entries());if(type==="ocorrencia"){db.ocorrencias.unshift(o);if(!await insert("telas_rasgadas",o))return}if(type==="desplaque"){o.quantidade=Number(o.quantidade);db.desplaques.push(o);if(!await insert("desplaques",o))return}if(type==="banho"){if(!o.data_inicio||!o.data_fim||!o.total_telas){alert("Preencha início, fim e quantidade de telas do ciclo.");return}o.total_telas=Number(o.total_telas);db.banhos.push(o);if(!await insert("banhos_removedor",o))return}if(type==="descarte"){db.descartes.unshift(o);if(!await insert("quadros_descartados",o))return}closeModal();renderAll()}
-}
-function closeModal(){modal.classList.remove("open")}
-function openCatalog(type){
- let label={operadores:"Nome do operador",motivos:"Motivo",tamanhos:"Tamanho"}[type],value=prompt("Digite "+label+":");
- if(!value?.trim())return;value=value.trim();if(db[type].includes(value))return;
- db[type].push(value);db[type].sort((a,b)=>a.localeCompare(b,"pt-BR"));
- const table={operadores:"operadores",motivos:"motivos",tamanhos:"tamanhos_tela"}[type];
- insert(table,{nome:value});renderCadastros();
-}
-setupNav();boot();
+
+  // Se os dados já tiverem carregado antes deste arquivo, redesenha agora
+  try { renderAll(); } catch (e) { /* o app.js desenha depois */ }
+})();
