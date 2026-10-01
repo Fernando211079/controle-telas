@@ -5,22 +5,17 @@ let supabaseClient=null;
 let sessionLoaded=false;
 const SUPA_URL=window.SUPA_URL, SUPA_ANON_KEY=window.SUPA_ANON_KEY;
 
-async function bindingAvailable(){
-  try{
-    const r=await fetch(SUPA_URL+"/auth/v1/health",{headers:{apikey:SUPA_ANON_KEY},signal:AbortSignal.timeout(4000)});
-    return r.ok;
-  }catch(e){return false}
-}
-
 function norm(s){return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase()}
 function fmtDate(s){if(!s)return "—";let [y,m,d]=String(s).slice(0,10).split("-");return `${d}/${m}/${y}`}
 function monthOf(s){return Number(String(s).slice(5,7))-1}
 function uid(){return crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()}
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function todayLocal(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
+function currentYear(){return String(new Date().getFullYear())}
 
 async function bindingAvailable(){
   try{
-    const r=await fetch(S.supabase.supabaseUrl+"/auth/v1/health",{headers:{apikey:S.supabase.supabaseKey},signal:AbortSignal.timeout(4000)});
+    const r=await fetch(SUPA_URL+"/auth/v1/health",{headers:{apikey:SUPA_ANON_KEY},signal:AbortSignal.timeout(4000)});
     return r.ok;
   }catch(e){return false}
 }
@@ -121,8 +116,8 @@ function showPage(p){
  renderAll();
 }
 function fillFilters(){
- let years=[...new Set([...db.ocorrencias,...db.descartes].map(x=>String(x.data).slice(0,4)).filter(Boolean))].sort();
- if(!years.includes("2026"))years.push("2026");
+ let years=[...new Set([...db.ocorrencias.map(x=>String(x.data).slice(0,4)),...db.descartes.map(x=>String(x.data).slice(0,4)),...db.desplaques.map(despYearOf),...db.banhos.map(x=>String(x.data_inicio).slice(0,4))].filter(Boolean))].sort();
+ if(!years.includes(currentYear()))years.push(currentYear());
  let curY=dashYear.value||years[years.length-1], curM=dashMonth.value||"all";
  let curOcM=filterOcMonth.value||"all", curDY=filterDescYear.value||String(years[years.length-1]);
  let curDespY=despYear.value||years[years.length-1];
@@ -139,7 +134,7 @@ function fillFilters(){
 }
 function renderAll(){fillFilters();renderDashboard();renderOcorrencias();renderDesplaques();renderBanhos();renderDescartes();renderCadastros()}
 function filteredOcc(){
- let y=dashYear.value||"2026", m=dashMonth.value||"all";
+ let y=dashYear.value||currentYear(), m=dashMonth.value||"all";
  return db.ocorrencias.filter(x=>String(x.data).startsWith(y+"-")&&(m==="all"||monthOf(x.data)==Number(m)));
 }
 function filteredDesp(y,m){
@@ -148,7 +143,7 @@ function filteredDesp(y,m){
 function card(label,value,hint="",icon=""){return `<div class="card"><div class="card-top">${icon?`<span class="card-ico">${icon}</span>`:""}<span class="label">${label}</span></div><div class="value">${value}</div><div class="hint">${hint}</div></div>`}
 function renderDashboard(){
  let data=filteredOcc();
- let y=dashYear.value||"2026", m=dashMonth.value||"all";
+ let y=dashYear.value||currentYear(), m=dashMonth.value||"all";
  let des=filteredDesp(y,m);
  let et=des.filter(x=>norm(x.unidade)==="etiquetas").reduce((a,x)=>a+Number(x.quantidade||0),0);
  let gr=des.filter(x=>norm(x.unidade)==="graficos").reduce((a,x)=>a+Number(x.quantidade||0),0);
@@ -202,13 +197,13 @@ function drawLine(id,series,labels,area=true){
 }
 function renderOcorrencias(){
  let q=norm(document.getElementById("searchOc").value),m=document.getElementById("filterOcMonth").value;
- let arr=db.ocorrencias.filter(x=>(m==="all"||monthOf(x.data)==Number(m))&&(!q||norm(x.operador+" "+x.motivo+" "+x.tamanho).includes(q))).sort((a,b)=>b.data.localeCompare(a.data));
+ let arr=db.ocorrencias.filter(x=>(m==="all"||monthOf(x.data)==Number(m))&&(!q||norm(x.operador+" "+x.motivo+" "+x.tamanho+" "+(x.observacao||"")).includes(q))).sort((a,b)=>b.data.localeCompare(a.data));
  document.getElementById("ocTable").innerHTML=arr.map(x=>`<tr><td>${fmtDate(x.data)}</td><td><strong>${esc(x.operador)}</strong></td><td>${esc(x.motivo)}</td><td>${esc(x.tamanho)}</td><td>${esc(x.observacao)}</td></tr>`).join("")||'<tr><td colspan="5" class="empty">Nenhum registro encontrado.</td></tr>';
 }
-function despYearOf(x){return x.data?String(x.data).slice(0,4):"2026"}
+function despYearOf(x){return x.data?String(x.data).slice(0,4):currentYear()}
 function despMonthIdx(x){return x.data?monthOf(x.data):monthNames.findIndex(m=>norm(m)===norm(x.mes))}
 function renderDesplaques(){
- let y=despYear.value||"2026";
+ let y=despYear.value||currentYear();
  let rows=db.desplaques.filter(x=>despYearOf(x)===y);
  let sum=(arr,un)=>arr.filter(x=>norm(x.unidade)===un).reduce((a,x)=>a+Number(x.quantidade||0),0);
  let te=0,tg=0;
@@ -240,9 +235,9 @@ function renderBanhos(){
 }
 function renderDescartes(){
  let q=norm(document.getElementById("searchDesc").value), y=document.getElementById("filterDescYear").value;
- let arr=db.descartes.filter(x=>(y==="all"||String(x.data).startsWith(y))&&(!q||norm(x.tamanho+" "+x.motivo).includes(q))).sort((a,b)=>b.data.localeCompare(a.data));
- let total=arr.length, last=arr.filter(x=>String(x.data).startsWith("2026")).length;
- document.getElementById("descKpis").innerHTML=card("Registros",total,"filtro atual","▣")+card("2026",last,"histórico do ano","◷")+card("Tamanhos",new Set(arr.map(x=>x.tamanho)).size,"dimensões diferentes","⌀");
+ let arr=db.descartes.filter(x=>(y==="all"||String(x.data).startsWith(y))&&(!q||norm(x.tamanho+" "+x.motivo+" "+(x.observacao||"")).includes(q))).sort((a,b)=>b.data.localeCompare(a.data));
+ let total=arr.length, refY=y==="all"?currentYear():y, last=arr.filter(x=>String(x.data).startsWith(refY)).length;
+ document.getElementById("descKpis").innerHTML=card("Registros",total,"filtro atual","▣")+card(refY,last,"registros no ano","◷")+card("Tamanhos",new Set(arr.map(x=>x.tamanho)).size,"dimensões diferentes","⌀");
  document.getElementById("descTable").innerHTML=arr.map(x=>`<tr><td>${fmtDate(x.data)}</td><td>${esc(x.tamanho)}</td><td>${esc(x.motivo)}</td><td>${esc(x.observacao)}</td></tr>`).join("")||'<tr><td colspan="4" class="empty">Nenhum registro encontrado.</td></tr>';
 }
 function renderCadastros(){
@@ -253,18 +248,18 @@ function openModal(type){
  const titles={ocorrencia:"Nova tela rasgada",desplaque:"Novo desplaque",banho:"Registrar troca de banho",descarte:"Novo quadro descartado"};
  modalTitle.textContent=titles[type];
  let html="";
- if(type==="ocorrencia")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Operador<select name="operador">${db.operadores.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field">Motivo<select name="motivo">${db.motivos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field">Tamanho<select name="tamanho">${db.tamanhos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field full">Observação<textarea name="observacao" rows="3"></textarea></label></div>`;
- if(type==="desplaque")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Unidade<select name="unidade"><option>Etiquetas</option><option>Gráficos</option></select></label><label class="field full">Quantidade<input type="number" name="quantidade" min="1" required></label></div>`;
- if(type==="banho")html=`<div class="form-grid"><label class="field">Início<input type="date" name="data_inicio" required></label><label class="field">Fim<input type="date" name="data_fim" required></label><label class="field full">Quantidade de telas do ciclo<input type="number" name="total_telas" min="1" required></label></div>`;
- if(type==="descarte")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${new Date().toISOString().slice(0,10)}" required></label><label class="field">Tamanho<select name="tamanho">${db.tamanhos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field full">Motivo<input name="motivo" value=""></label><label class="field full">Observação<textarea name="observacao" rows="3"></textarea></label></div>`;
+ if(type==="ocorrencia")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${todayLocal()}" required></label><label class="field">Operador<select name="operador">${db.operadores.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field">Motivo<select name="motivo">${db.motivos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field">Tamanho<select name="tamanho">${db.tamanhos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field full">Observação<textarea name="observacao" rows="3"></textarea></label></div>`;
+ if(type==="desplaque")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${todayLocal()}" required></label><label class="field">Unidade<select name="unidade"><option>Etiquetas</option><option>Gráficos</option></select></label><label class="field full">Quantidade<input type="number" name="quantidade" min="1" required></label></div>`;
+ if(type==="banho")html=`<div class="form-grid"><label class="field">Início<input type="date" name="data_inicio" value="${todayLocal()}" required></label><label class="field">Fim<input type="date" name="data_fim" required></label><label class="field full">Quantidade de telas do ciclo<input type="number" name="total_telas" min="1" required></label></div>`;
+ if(type==="descarte")html=`<div class="form-grid"><label class="field">Data<input type="date" name="data" value="${todayLocal()}" required></label><label class="field">Tamanho<select name="tamanho">${db.tamanhos.map(x=>`<option>${esc(x)}</option>`).join("")}</select></label><label class="field full">Motivo<input name="motivo" value=""></label><label class="field full">Observação<textarea name="observacao" rows="3"></textarea></label></div>`;
  modalForm.innerHTML=html+`<div class="form-actions"><button type="button" class="secondary" onclick="closeModal()">Cancelar</button><button class="primary">Salvar</button></div>`;
  modal.classList.add("open");
- modalForm.onsubmit=async e=>{e.preventDefault();let f=new FormData(modalForm),o=Object.fromEntries(f.entries());if(type==="ocorrencia"){db.ocorrencias.unshift(o);if(!await insert("telas_rasgadas",o))return}if(type==="desplaque"){o.quantidade=Number(o.quantidade);db.desplaques.push(o);if(!await insert("desplaques",o))return}if(type==="banho"){if(!o.data_inicio||!o.data_fim||!o.total_telas){alert("Preencha início, fim e quantidade de telas do ciclo.");return}o.total_telas=Number(o.total_telas);db.banhos.push(o);if(!await insert("banhos_removedor",o))return}if(type==="descarte"){db.descartes.unshift(o);if(!await insert("quadros_descartados",o))return}closeModal();renderAll()}
+ modalForm.onsubmit=async e=>{e.preventDefault();let f=new FormData(modalForm),o=Object.fromEntries(f.entries());Object.keys(o).forEach(k=>{if(typeof o[k]==="string"&&!o[k].trim())o[k]=null});if(type==="banho"){if(!o.data_inicio||!o.data_fim||!o.total_telas){alert("Preencha início, fim e quantidade de telas do ciclo.");return}if(o.data_fim<o.data_inicio){alert("A data de fim não pode ser anterior ao início.");return}o.total_telas=Number(o.total_telas)}if(type==="ocorrencia"){if(!await insert("telas_rasgadas",o))return;db.ocorrencias.unshift(o)}if(type==="desplaque"){o.quantidade=Number(o.quantidade);if(!await insert("desplaques",o))return;db.desplaques.push(o)}if(type==="banho"){if(!await insert("banhos_removedor",o))return;db.banhos.push(o)}if(type==="descarte"){if(!await insert("quadros_descartados",o))return;db.descartes.unshift(o)}closeModal();renderAll()}
 }
 function closeModal(){modal.classList.remove("open")}
 function openCatalog(type){
  let label={operadores:"Nome do operador",motivos:"Motivo",tamanhos:"Tamanho"}[type],value=prompt("Digite "+label+":");
- if(!value?.trim())return;value=value.trim();if(db[type].includes(value))return;
+ if(!value?.trim())return;value=value.trim();if(db[type].includes(value)){alert("Esse item já está cadastrado.");return}
  db[type].push(value);db[type].sort((a,b)=>a.localeCompare(b,"pt-BR"));
  const table={operadores:"operadores",motivos:"motivos",tamanhos:"tamanhos_tela"}[type];
  insert(table,{nome:value});renderCadastros();

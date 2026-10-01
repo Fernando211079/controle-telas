@@ -1,4 +1,4 @@
-/* catalogo.js  (versão 3)
+/* catalogo.js  (versão 3.1 — ano dinâmico)
    1) Botões Operadores / Motivos / Tamanhos ao lado de "+ Nova ocorrência" (abrem janela para adicionar e excluir)
    2) Botões de EDITAR (✎) e EXCLUIR (×) em todas as tabelas de registros:
       Telas rasgadas, Desplaque, Banho removedor e Quadros descartados
@@ -156,7 +156,7 @@
   const origDesplaques = window.renderDesplaques;
   window.renderDesplaques = function () {
     origDesplaques();
-    const y = $("despYear").value || "2026";
+    const y = $("despYear").value || currentYear();
     const arr = db.desplaques.filter(x => despYearOf(x) === y)
       .sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
     desenhar("despTable", "desplaques", arr,
@@ -260,6 +260,9 @@
     form.onsubmit = async ev => {
       ev.preventDefault();
       const novo = cfg.valores(new FormData(form));
+      if (tab === "banhos" && novo.data_fim && novo.data_inicio && novo.data_fim < novo.data_inicio) {
+        alert("A data de fim não pode ser anterior ao início."); return;
+      }
       if (supabaseClient) {
         if (r.id == null) { semId(); return; }
         const { data, error } = await supabaseClient.from(TAB[tab]).update(novo).eq("id", r.id).select();
