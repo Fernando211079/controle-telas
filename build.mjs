@@ -16,5 +16,7 @@ await build({
 });
 
 cpSync('index.html', 'dist/index.html');
+cpSync('manifest.webmanifest', 'dist/manifest.webmanifest');
+cpSync('sw.js', 'dist/sw.js');
 cpSync('assets', 'dist/assets', { recursive: true });
 console.log('build ok -> dist/');

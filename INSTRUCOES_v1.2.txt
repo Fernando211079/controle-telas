@@ -1,0 +1,58 @@
+CORREÇÕES v1.2 — como aplicar no repositório GitHub
+=====================================================
+
+ARQUIVOS PARA SUBSTITUIR (já existem no repo):
+  index.html
+  build.mjs
+  assets/app.js
+  assets/catalogo.js
+
+ARQUIVOS NOVOS (adicionar ao repo, mantendo as pastas):
+  manifest.webmanifest
+  sw.js
+  assets/icons/icon-192.png
+  assets/icons/icon-512.png
+  assets/icons/icon-512-maskable.png
+  assets/icons/apple-touch-icon.png
+
+OPÇÃO A — pelo site do GitHub (sem instalar nada):
+  1. Abra https://github.com/Fernando211079/controle-telas
+  2. Para substituir: clique no arquivo → ícone de caneta (Edit) → apague tudo
+     e cole o conteúdo do arquivo correspondente deste pacote → Commit changes.
+  3. Para adicionar novos: Add file → Upload files → arraste os arquivos
+     (ou Create new file e cole o conteúdo; nos ícones use Upload).
+
+OPÇÃO B — pelo PC (Git instalado):
+  1. Extraia este ZIP sobre a pasta do projeto (substituindo os 4 arquivos).
+  2. Abra o terminal na pasta e rode:
+       git add -A
+       git commit -m "v1.2: ano dinâmico, correções de salvamento, PWA instalável"
+       git push
+
+DEPOIS: publique pelo botão Publish do Verdent (o build copia o manifest e o
+sw.js para o dist automaticamente).
+
+CORREÇÕES APLICADAS
+===================
+1. Ano dinâmico — nada mais fixo em "2026" (filtros, KPIs, fallbacks).
+2. Registro só aparece na tabela DEPOIS de salvar no Supabase
+   (acabou o registro "fantasma" e a duplicação ao tentar de novo).
+   Importante: o insert ainda devolve o "id" para o objeto, então
+   editar/excluir continua funcionando (agora o id chega antes de entrar na lista).
+3. Campos vazios viram null — não quebram inserts em colunas date do Postgres.
+4. Data padrão dos formulários no fuso local (não virava "amanhã" depois das 21h).
+5. Filtro de anos inclui desplaque e banhos.
+6. Validação: data de fim do banho não pode ser anterior ao início
+   (no cadastro e na edição).
+7. Aviso ao cadastrar item duplicado.
+8. Pesquisa de descartes inclui observação.
+9. REMOVIDA a função bindingAvailable() duplicada no app.js — a segunda cópia
+   referenciava uma variável "S" que não existe mais (código morto que quebraria).
+
+PWA (app instalável no celular e no PC)
+=======================================
+- Android/Chrome: abra a URL publicada → menu ⋮ → "Instalar app".
+- iPhone/Safari: Compartilhar → "Adicionar à Tela de Início".
+- PC: ícone de instalação na barra de endereço do Chrome/Edge.
+- O app abre em tela cheia, com ícone próprio, e funciona offline.
+- As chamadas ao Supabase NUNCA são cacheadas (sempre dados frescos).

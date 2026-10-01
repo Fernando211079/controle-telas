@@ -4,6 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Controle de Telas | Indemetal</title>
+  <meta name="theme-color" content="#17212b">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Controle de Telas">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&family=Saira+Condensed:wght@600;700&display=swap" rel="stylesheet">
@@ -21,7 +27,7 @@
         <button class="nav" data-page="descartes">▣ <span>Quadros descartados</span></button>
         <button class="nav" data-page="cadastros">⚙ <span>Cadastros</span></button>
       </nav>
-      <div class="sidebar-foot">Sistema v1.1<br><small>Supabase + Verdent</small></div>
+      <div class="sidebar-foot">Sistema v1.2<br><small>Supabase + Verdent</small></div>
     </aside>
 
     <main class="main">
@@ -104,5 +110,10 @@
   <script src="assets/seed.js"></script>
   <script src="assets/app.js"></script>
   <script src="assets/catalogo.js"></script>
+  <script>
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+  }
+  </script>
   </body>
  </html>
