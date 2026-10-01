@@ -1,7 +1,8 @@
-/* catalogo.js  (versão 2)
+/* catalogo.js  (versão 3)
    1) Botões Operadores / Motivos / Tamanhos ao lado de "+ Nova ocorrência" (abrem janela para adicionar e excluir)
    2) Botões de EDITAR (✎) e EXCLUIR (×) em todas as tabelas de registros:
       Telas rasgadas, Desplaque, Banho removedor e Quadros descartados
+   3) Busca ao vivo (enquanto digita) em Telas rasgadas e Quadros descartados
    Carregar DEPOIS do app.js. */
 (function () {
   const $ = id => document.getElementById(id);
@@ -11,6 +12,13 @@
   const TAB = { ocorrencias: "telas_rasgadas", desplaques: "desplaques", banhos: "banhos_removedor", descartes: "quadros_descartados" };
   let catAtual = null;
   const regs = {};
+
+  // Busca: cada palavra digitada precisa aparecer em algum lugar da linha (em qualquer ordem)
+  const combina = (busca, texto) => {
+    const t = norm(texto);
+    return norm(busca).split(/\s+/).filter(Boolean).every(p => t.includes(p));
+  };
+  const atrasar = (fn, ms) => { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms || 120); }; };
 
   // ---------- Estilo ----------
   const st = document.createElement("style");
@@ -136,9 +144,9 @@
 
   // --- Telas rasgadas
   window.renderOcorrencias = function () {
-    const q = norm($("searchOc").value), m = $("filterOcMonth").value;
+    const q = $("searchOc").value, m = $("filterOcMonth").value;
     const arr = db.ocorrencias
-      .filter(x => (m === "all" || monthOf(x.data) == Number(m)) && (!q || norm(x.operador + " " + x.motivo + " " + x.tamanho).includes(q)))
+      .filter(x => (m === "all" || monthOf(x.data) == Number(m)) && (!q.trim() || combina(q, [x.operador, x.motivo, x.tamanho, x.observacao, fmtDate(x.data)].join(" "))))
       .sort((a, b) => String(b.data).localeCompare(String(a.data)));
     desenhar("ocTable", "ocorrencias", arr,
       x => `<td>${fmtDate(x.data)}</td><td><strong>${esc(x.operador)}</strong></td><td>${esc(x.motivo)}</td><td>${esc(x.tamanho)}</td><td>${esc(x.observacao)}</td>`, 5);
@@ -170,18 +178,22 @@
   const origDescartes = window.renderDescartes;
   window.renderDescartes = function () {
     origDescartes();
-    const q = norm($("searchDesc").value), y = $("filterDescYear").value;
+    const q = $("searchDesc").value, y = $("filterDescYear").value;
     const arr = db.descartes
-      .filter(x => (y === "all" || String(x.data).startsWith(y)) && (!q || norm(x.tamanho + " " + x.motivo).includes(q)))
+      .filter(x => (y === "all" || String(x.data).startsWith(y)) && (!q.trim() || combina(q, [x.tamanho, x.motivo, x.observacao, fmtDate(x.data)].join(" "))))
       .sort((a, b) => String(b.data).localeCompare(String(a.data)));
     desenhar("descTable", "descartes", arr,
       x => `<td>${fmtDate(x.data)}</td><td>${esc(x.tamanho)}</td><td>${esc(x.motivo)}</td><td>${esc(x.observacao)}</td>`, 4);
   };
 
   // Os campos de busca/filtro guardaram a função antiga; ligar de novo nas novas
-  $("searchOc").oninput = renderOcorrencias;
+  $("searchOc").oninput = atrasar(() => renderOcorrencias());
+  $("searchOc").placeholder = "Pesquisar operador, motivo, tamanho, data...";
+  $("searchOc").autocomplete = "off";
   $("filterOcMonth").onchange = renderOcorrencias;
-  $("searchDesc").oninput = renderDescartes;
+  $("searchDesc").oninput = atrasar(() => renderDescartes());
+  $("searchDesc").placeholder = "Pesquisar tamanho, motivo, data...";
+  $("searchDesc").autocomplete = "off";
   $("filterDescYear").onchange = renderDescartes;
   $("despYear").onchange = renderDesplaques;
 
